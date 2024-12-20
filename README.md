@@ -37,4 +37,4 @@ Unless you explicitly state otherwise, any contribution intentionally submitted 
 
 ---
 
-© 2025 Zero Ekkusu
+© 2025 PT Services DMCC
