@@ -1,25 +1,34 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity 0.8.28;
 
-// @todo Inspect these contracts later.
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/interfaces/IERC4626.sol";
-import {CommonAdminOwner} from "./CommonAdminOwner.sol";
-import {IERC20Plus} from "./interfaces/IERC20Plus.sol";
-import {LibPermit} from "./helpers/LibPermit.sol";
+import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
+import {ERC20PermitUpgradeable} from
+    "@openzeppelin-contracts-upgradeable/token/ERC20/extensions/ERC20PermitUpgradeable.sol";
 
-import {
-    ERC20PermitUpgradeable,
-    ERC20Upgradeable
-} from "@openzeppelin-contracts-upgradeable/token/ERC20/extensions/ERC20PermitUpgradeable.sol";
+import {Initializable} from "@openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
+import {OwnableUpgradeable} from "@openzeppelin-contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin-contracts-upgradeable/utils/PausableUpgradeable.sol";
+
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {ERC20Upgradeable} from "@openzeppelin-contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {LibPermit} from "./etc/LibPermit.sol";
 
 /// @title Yield Exposed Token
 /// @dev A base contract to create yield exposed tokens.
-// @todo Account for possible USDC fees.
-abstract contract YieldExposedToken is CommonAdminOwner, IERC4626, ERC20PermitUpgradeable {
-    using SafeERC20 for IERC20Plus;
+// @todo Account for possible fees on transfers of the underlying token.
+abstract contract YieldExposedToken is
+    Initializable,
+    OwnableUpgradeable,
+    PausableUpgradeable,
+    IERC4626,
+    ERC20PermitUpgradeable
+{
+    using SafeERC20 for IERC20;
 
-    /// @dev Used in cross-chain communication.
+    /// @dev Used for cross-chain communication.
     enum Instruction {
         COMPLETE_MIGRATION
     }
@@ -28,16 +37,16 @@ abstract contract YieldExposedToken is CommonAdminOwner, IERC4626, ERC20PermitUp
      * @dev Storage of the YieldExposedToken contract.
      * @dev It's implemented on a custom ERC-7201 namespace to reduce the risk of storage collisions when using with upgradeable contracts.
      * @custom:storage-location erc7201:0xpolygon.storage.YieldExposedToken
+     * @param minimumReservePercentage 1 is 1%. The reserve is based on the total supply of yeToken, and may not account for uncompleted migrations from L2s. Please refer to `accrueYield` for more information.
      */
-    // @note Some of these can be be immutable values.
     struct YieldExposedTokenStorage {
+        IERC20 underlyingToken;
         uint8 decimals;
-        IERC20Plus underlyingToken;
-        /// @dev 100 is 100%.
         uint8 minimumReservePercentage;
-        IERC4626 yieldGeneratingVault;
+        IERC4626 yieldVault;
         address yieldRecipient;
         IPolygonZkEVMBridge lxlyBridge;
+        uint32 lxlyId;
         address nativeConverter;
     }
 
@@ -46,142 +55,156 @@ abstract contract YieldExposedToken is CommonAdminOwner, IERC4626, ERC20PermitUp
     bytes32 private constant _YIELD_EXPOSED_TOKEN_STORAGE =
         0xed23de664e59f2cbf6ba852da776346da171cf53c9d06b116fea0fc5ee912500;
 
-    event Deposit(address indexed from, address indexed to, uint256 amount);
     event ReserveReplenished(uint256 newReserve);
-    event YieldAccrued(address indexed yieldRecipient, uint256 shares);
-    event USDCClaimed(address indexed destinationAddress, uint256 amount);
+    event YieldAccrued(address indexed yieldRecipient, uint256 yvShares);
 
     constructor() {
         _disableInitializers();
-        // @todo Inspect this.
-        // override default OZ behaviour that sets msg.sender as the owner
-        // set the owner of the implementation to an address that can not change anything
-        renounceOwnership();
     }
 
-    // @todo Inspect the modifiers.
     /// @dev `decimals` will match the underlying token.
     function initialize(
         address owner_,
         string calldata name_,
         string calldata symbol_,
         address underlyingToken_,
-        uint8 minReservePercentage_,
-        address yieldGeneratingVault_,
+        uint8 minimumReservePercentage_,
+        address yieldVault_,
         address yieldRecipient_,
         address lxlyBridge_,
         address nativeConverter_
-    ) external onlyProxy onlyAdmin initializer {
-        require(underlyingToken_ != address(0), "INVALID_TOKEN");
-        require(minReservePercentage_ <= 100, "INVALID_PERCENTAGE");
-        require(yieldGeneratingVault_ != address(0), "INVALID_VAULT");
+    ) external initializer {
+        require(owner_ != address(0), "INVALID_OWNER");
+        require(bytes(name_).length > 0, "INVALID_NAME");
+        require(bytes(symbol_).length > 0, "INVALID_SYMBOL");
+        require(underlyingToken_ != address(0), "INVALID_UNDERLYING_TOKEN");
+        require(minimumReservePercentage_ <= 100, "INVALID_PERCENTAGE");
+        require(yieldVault_ != address(0), "INVALID_VAULT");
         require(yieldRecipient_ != address(0), "INVALID_BENEFICIARY");
         require(lxlyBridge_ != address(0), "INVALID_BRIDGE");
+        require(nativeConverter_ != address(0), "INVALID_CONVERTER");
 
         __ERC20_init(name_, symbol_);
         __ERC20Permit_init(name_);
 
-        // @todo Inspect these.
-        __CommonAdminOwner_init();
-        _transferOwnership(owner_);
+        __Ownable_init(owner_);
+        __Pausable_init();
 
-        YieldExposedTokenStorage storage s = _getYieldExposedTokenStorage();
-        s.decimals = ERC20Upgradeable(underlyingToken_).decimals();
-        s.underlyingToken = IERC20Plus(underlyingToken_);
-        s.minimumReservePercentage = minReservePercentage_;
-        s.yieldGeneratingVault = IERC4626(yieldGeneratingVault_);
-        s.yieldRecipient = yieldRecipient_;
-        s.lxlyBridge = IPolygonZkEVMBridge(lxlyBridge_);
-        s.nativeConverter = nativeConverter_;
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
 
-        IERC20Plus(underlyingToken_).approve(yieldGeneratingVault_, type(uint256).max);
-        IERC20Plus(address(this)).approve(lxlyBridge_, type(uint256).max);
+        $.underlyingToken = IERC20(underlyingToken_);
+        $.decimals = IERC20Metadata(underlyingToken_).decimals();
+        $.minimumReservePercentage = minimumReservePercentage_;
+        $.yieldVault = IERC4626(yieldVault_);
+        $.yieldRecipient = yieldRecipient_;
+        $.lxlyBridge = IPolygonZkEVMBridge(lxlyBridge_);
+        $.lxlyId = IPolygonZkEVMBridge(lxlyBridge_).networkID();
+        $.nativeConverter = nativeConverter_;
+
+        IERC20(underlyingToken_).approve(yieldVault_, type(uint256).max);
+        _approve(address(this), address(lxlyBridge_), type(uint256).max);
     }
 
-    function underlyingToken() public view returns (IERC20Plus) {
+    // @todo Remove.
+    function underlyingToken() public view returns (IERC20) {
         return _getYieldExposedTokenStorage().underlyingToken;
     }
 
+    /// @notice The number of decimals of the yield exposed token.
+    /// @notice The number of decimals is the same as that of the underlying token.
+    function decimals() public view virtual override(ERC20Upgradeable, IERC20Metadata) returns (uint8) {
+        return _getYieldExposedTokenStorage().decimals;
+    }
+
+    /// @notice Yield exposed tokens have an internal reserve of the underlying token from which withdrawals are serviced first.
+    /// @notice When the reserve is below the minimum threshold, it can be replenished by calling `replenishReserve`.
     function minReservePercentage() public view returns (uint256) {
-        return _getYieldExposedTokenStorage().minimumReservePercentage;
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+        return $.minimumReservePercentage;
     }
 
-    function yieldGeneratingVault() public view returns (IERC4626) {
-        return _getYieldExposedTokenStorage().yieldGeneratingVault;
+    /// @notice An external ERC-4246 compatible vault into which the underlying token is deposited to generate yield.
+    function yieldVault() public view returns (IERC4626) {
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+        return $.yieldVault;
     }
 
+    /// @notice The address that receives yield generated by the yield vault.
     function yieldRecipient() public view returns (address) {
-        return _getYieldExposedTokenStorage().yieldRecipient;
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+        return $.yieldRecipient;
     }
 
+    /// @notice LxLy Bridge, which connectes AggLayer networks.
     function lxlyBridge() public view returns (IPolygonZkEVMBridge) {
-        return _getYieldExposedTokenStorage().lxlyBridge;
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+        return $.lxlyBridge;
     }
 
+    /// @notice The address of Native Converter on L2s.
+    /// @dev Used for authentication in cross-chain communications.
     function nativeConverter() public view returns (address) {
-        return _getYieldExposedTokenStorage().nativeConverter;
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+        return $.nativeConverter;
     }
 
-    // @notice The underlying asset that backs yeUSDC.
+    /// @notice The underlying token that backs yeToken.
     function asset() external view override returns (address assetTokenAddress) {
-        return address(underlyingToken());
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+        return address($.underlyingToken);
     }
 
-    // @notice The total backing of yeUSDC in USDC.
-    // @notice May be less that the actual amount if Native Converter on L2 has minted USDC-e and has not migrated its to L1 yet.
+    /// @notice The total backing of yeToken in the underlying token.
+    /// @notice May be less that the actual amount if backing in Native Converter on L2s hasn't been migrated to L1 yet.
     function totalAssets() public view override returns (uint256 totalManagedAssets) {
-        return underlyingToken().balanceOf(address(this))
-            + yieldGeneratingVault().convertToAssets(yieldGeneratingVault().balanceOf(address(this)));
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+
+        return $.underlyingToken.balanceOf(address(this))
+            + $.yieldVault.convertToAssets($.yieldVault.balanceOf(address(this)));
     }
 
-    // @notice yeUSDC is backed 1:1 by USDC.
-    function convertToShares(uint256 assets) external pure override returns (uint256 shares) {
-        return assets;
+    /// @notice yeToken is backed 1:1 by the underlying token.
+    /// @dev Caution: This function determines the amount of yeToken the other ERC-4626 functions mint or burn when working with the underlying token.
+    function convertToShares(uint256 assets) public pure override returns (uint256 shares) {
+        shares = assets;
     }
 
-    // @notice yeUSDC is backed 1:1 by USDC.
-    function convertToAssets(uint256 shares) external pure override returns (uint256 assets) {
-        return shares;
+    /// @notice yeToken is backed 1:1 by the underlying token.
+    /// @dev Caution: This function determines the amount of the underlying token the other ERC-4626 functions transfer from or to recipient when working with yeToken.
+    function convertToAssets(uint256 shares) public pure override returns (uint256 assets) {
+        assets = shares;
     }
 
-    // @notice How much USDC a specific user can deposit. (Depositing USDC mints yeUSDC).
+    /// @notice How much underlying token a specific user can deposit. (Depositing the underlying token mints yeToken).
     function maxDeposit(address) external pure override returns (uint256 maxAssets) {
         return type(uint256).max;
     }
 
-    // @notice How much yeUSDC one would get if they deposited a specific amount of USDC right now.
+    /// @notice How much yeToken would be minted if a specific amount of the underlying token were deposited right now.
     function previewDeposit(uint256 assets) external pure override returns (uint256 shares) {
-        return assets;
+        return convertToShares(assets);
     }
 
-    // @notice Deposit a specific amount of USDC and receive yeUSDC.
-    function deposit(uint256 assets, address destinationAddress) external override returns (uint256 shares) {
-        return _deposit(assets, 0, destinationAddress, false, false);
+    /// @notice Deposit a specific amount of the underlying token and get yeToken.
+    function deposit(uint256 assets, address receiver) external override returns (uint256 shares) {
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+        return _deposit(assets, $.lxlyId, receiver, false);
     }
 
-    // @notice Deposit a specific amount of USDC and receive yeUSDC.
-    // @dev Uses EIP-2612 permit.
-    function deposit(uint256 assets, bytes calldata permitData, address destinationAddress)
-        external
-        returns (uint256 shares)
-    {
-        return _deposit(assets, permitData, 0, destinationAddress, false, false);
-    }
-
-    // @notice Deposit a specific amount of USDC, and bridge yeUSDC to L2.
-    // @dev If yeUSDC is custom mapped to USDC-e on L2, the user will receive USDC-e. If not, they will receive WYeUSDC.
+    /// @notice Deposit a specific amount of the underlying token, and bridge yeToken to an L2.
+    /// @dev If yeToken is custom mapped on LxLy Bridge on the L2, the user will receive the custom token. If not, they will receive wrapped yeToken.
     function depositAndBridge(
         uint256 assets,
         address destinationAddress,
         uint32 destinationNetworkId,
         bool forceUpdateGlobalExitRoot
     ) external returns (uint256 shares) {
-        return _deposit(assets, destinationNetworkId, destinationAddress, true, forceUpdateGlobalExitRoot);
+        return _deposit(assets, destinationNetworkId, destinationAddress, forceUpdateGlobalExitRoot);
     }
 
-    // @notice Deposit a specific amount of USDC, and bridge yeUSDC to L2.
-    // dev If yeUSDC is custom mapped to USDC-e on L2, the user will receive USDC-e. If not, they will receive WYeUSDC.
-    // @dev Uses EIP-2612 permit.
+    /// @notice Deposit a specific amount of the underlying token, and bridge yeToken to an L2.
+    // dev If yeToken is custom mapped on LxLy Bridge on the L2, the user will receive the custom token. If not, they will receive wrapped yeToken.
+    /// @dev Uses EIP-2612 permit to transfer the underlying token from the sender to itself.
     function depositAndBridge(
         uint256 assets,
         address destinationAddress,
@@ -189,172 +212,205 @@ abstract contract YieldExposedToken is CommonAdminOwner, IERC4626, ERC20PermitUp
         bool forceUpdateGlobalExitRoot,
         bytes calldata permitData
     ) external returns (uint256 shares) {
-        return _deposit(assets, permitData, destinationNetworkId, destinationAddress, true, forceUpdateGlobalExitRoot);
+        return _deposit(assets, permitData, destinationNetworkId, destinationAddress, forceUpdateGlobalExitRoot);
     }
 
-    // @notice Deposits USDC, mints the equal amount of yeUSDC, and optionally bridges it.
+    /// @notice Locks the underlying token, mints yeToken, and optionally bridges it to an L2.
     function _deposit(
-        uint256 amount,
+        uint256 assets,
         uint32 destinationNetworkId,
         address destinationAddress,
-        bool bridge,
         bool forceUpdateGlobalExitRoot
     ) internal returns (uint256 shares) {
-        // Check inputs.
-        require(destinationAddress != address(0), "INVALID_RECEIVER");
-        require(amount > 0, "INVALID_AMOUNT");
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
 
-        // Transfer the USDC from the sender to the contract.
-        underlyingToken().safeTransferFrom(msg.sender, address(this), amount);
+        // Set the return value.
+        shares = convertToShares(assets);
 
-        // Keep the reserve amount in the contract (i.e., the reserve).
-        uint256 amountToReserve = (amount * minReservePercentage()) / 100;
-        uint256 amountToDeposit = amount - amountToReserve;
+        // Check input.
+        require(assets > 0, "INVALID_AMOUNT");
 
-        // Deposit the remaining amount in the yield generating vault, if possible.
-        uint256 maxDeposit_ = yieldGeneratingVault().maxDeposit(address(this));
-        amountToDeposit = amountToDeposit > maxDeposit_ ? maxDeposit_ : amountToDeposit;
-        if (amountToDeposit > 0) {
-            yieldGeneratingVault().deposit(amountToDeposit, address(this));
+        // Transfer the underlying token from the sender to itself.
+        $.underlyingToken.safeTransferFrom(msg.sender, address(this), assets);
+
+        // Calculate the amount to reserve and the amount to deposit into the yield vault.
+        uint256 assetsToReserve = (assets * $.minimumReservePercentage) / 100;
+        uint256 assetsToDeposit = assets - assetsToReserve;
+
+        // Deposit into the yield vault.
+        uint256 maxDeposit_ = $.yieldVault.maxDeposit(address(this));
+        assetsToDeposit = assetsToDeposit > maxDeposit_ ? maxDeposit_ : assetsToDeposit;
+        if (assetsToDeposit > 0) {
+            $.yieldVault.deposit(assetsToDeposit, address(this));
         }
 
-        if (bridge) {
-            // Mint yeUSDC to self and bridge it to the recipient.
-            _mint(address(this), amount);
+        // Mint yeToken.
+        if (destinationNetworkId != $.lxlyId) {
+            // Mint to self and bridge to the recipient.
+            _mint(address(this), shares);
             lxlyBridge().bridgeAsset(
-                destinationNetworkId, destinationAddress, amount, address(this), forceUpdateGlobalExitRoot, ""
+                destinationNetworkId, destinationAddress, shares, address(this), forceUpdateGlobalExitRoot, ""
             );
         } else {
-            // Mint yeUSDC to the recipient.
-            _mint(destinationAddress, amount);
+            // Mint to the recipient.
+            _mint(destinationAddress, shares);
         }
 
         // Emit the ERC-4626 event.
-        emit Deposit(msg.sender, destinationAddress, amount);
-
-        return amount;
+        emit IERC4626.Deposit(msg.sender, destinationAddress, assets, shares);
     }
 
-    // @notice Deposits USDC, mints the equal amount of yeUSDC, and optionally bridges it.
-    // @dev Uses EIP-2612 permit.
+    /// @notice Locks the underlying token, mints yeToken, and optionally bridges it to an L2.
+    /// @dev Uses EIP-2612 permit to transfer the underlying token from the sender to itself.
     function _deposit(
-        uint256 amount,
+        uint256 assets,
         bytes calldata permitData,
         uint32 destinationNetworkId,
         address destinationAddress,
-        bool bridge,
         bool forceUpdateGlobalExitRoot
     ) internal returns (uint256 shares) {
-        // Apply the permit if provided.
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+
+        // Use the permit.
         if (permitData.length > 0) {
-            LibPermit.permit(address(underlyingToken()), amount, permitData);
+            LibPermit.permit(address($.underlyingToken), assets, permitData);
         }
 
-        return _deposit(amount, destinationNetworkId, destinationAddress, bridge, forceUpdateGlobalExitRoot);
+        return _deposit(assets, destinationNetworkId, destinationAddress, forceUpdateGlobalExitRoot);
     }
 
-    // @notice How much yeUSDC a specific user can mint. (Minting yeUSDC locks USDC).
+    /// @notice How much yeToken a specific user can mint. (Minting yeToken locks the underlying token).
     function maxMint(address) external pure override returns (uint256 maxShares) {
         return type(uint256).max;
     }
 
-    // @notice How much USDC it would take to mint a specific amount of yeUSDC right now.
+    /// @notice How much underlying token would be required to mint a specific amount of yeToken right now.
+    /// @dev This function does not revert.
     function previewMint(uint256 shares) external pure override returns (uint256 assets) {
-        return shares;
+        return convertToAssets(shares);
     }
 
-    // @notice Mint a specific amount of yeUSDC by depositing USDC.
+    /// @notice Mint a specific amount of yeToken by depositing a required amount of the underlying token.
     function mint(uint256 shares, address receiver) external override returns (uint256 assets) {
-        return _deposit(shares, 0, receiver, false, false);
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+
+        // Set the return value.
+        assets = convertToAssets(shares);
+
+        // Mint yeToken to the recipient.
+        uint256 mintedShares = _deposit(assets, $.lxlyId, receiver, false);
+
+        // Check output.
+        require(mintedShares >= shares, "INSUFFICIENT_MINT");
     }
 
-    // @notice How much USDC a specific user can withdraw. (Withdrawing USDC burns yeUSDC).
+    /// @notice How much underlying token a specific user can withdraw. (Withdrawing the underlying token burns yeToken).
     function maxWithdraw(address owner) external view override returns (uint256 maxAssets) {
-        return _withdrawable(balanceOf(owner), false);
+        return _simulateWithdrawal(convertToAssets(balanceOf(owner)), false);
     }
 
-    // @notice How much yeUSDC would be burned if a specific amount of USDC were withdrawn right now.
+    /// @notice How much yeToken would be burned if a specific amount of the underlying token were withdrawn right now.
+    /// @dev This function may revert.
     function previewWithdraw(uint256 assets) external view override returns (uint256 shares) {
-        return _withdrawable(assets, true);
+        return _simulateWithdrawal(assets, true);
     }
 
-    // @notice Withdraw a specific amount of USDC by burning the same amount of yeUSDC.
-    function withdraw(uint256 assets, address receiver, address owner) public override returns (uint256 shares) {
-        // @todo Check if the owner allowed the sender to withdraw on their behalf.
+    /// @dev Calculates the amount of the underlying token that can be withdrawn right now.
+    /// @param assets The maximum amount of the underlying token to simulate a withdrawal for.
+    /// @param force Whether to enforce the amount, reverting if it cannot be met.
+    function _simulateWithdrawal(uint256 assets, bool force) internal view returns (uint256 withdrawableAssets) {
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
 
-        uint256 originalAmount = assets;
+        // The amount that cannot be withdrawn at the moment.
+        uint256 remainingAssets = assets;
 
-        // Attempt to withdraw from the reserve first
-        uint256 currentBalance = underlyingToken().balanceOf(address(this));
+        // Simulate withdrawal from the reserve.
+        uint256 reserve = $.underlyingToken.balanceOf(address(this));
 
-        if (currentBalance >= assets) {
-            _burn(owner, originalAmount);
-            underlyingToken().safeTransfer(receiver, assets);
-            return originalAmount;
-        } else if (currentBalance > 0) {
-            assets -= currentBalance;
+        if (reserve >= remainingAssets) {
+            return assets;
+        } else {
+            remainingAssets -= reserve;
         }
 
-        // Withdraw the remaining amount from the vault
+        // Simulate withdrawal from the yield vault.
+        uint256 maxWithdraw_ = yieldVault().maxWithdraw(address(this));
+        maxWithdraw_ = remainingAssets > maxWithdraw_ ? maxWithdraw_ : remainingAssets;
 
-        uint256 maxWithdraw_ = yieldGeneratingVault().maxWithdraw(address(this));
-        maxWithdraw_ = assets > maxWithdraw_ ? maxWithdraw_ : assets;
+        if (remainingAssets == maxWithdraw_) return assets;
+        remainingAssets -= maxWithdraw_;
 
-        // 2. always return USDC from the vault (if there's any)
+        // Revert if the `assets` is enforced and there is remaining amount.
+        if (force) require(remainingAssets == 0, "AMOUNT_TOO_LARGE");
+
+        // Return the amount of the underlying token that can be withdrawn right now.
+        return assets - remainingAssets;
+    }
+
+    /// @notice Withdraw a specific amount of the underlying token by burning a required amount of yeToken.
+    function withdraw(uint256 assets, address receiver, address owner) public override returns (uint256 shares) {
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+
+        // Set the return value.
+        shares = convertToShares(assets);
+
+        // Check input.
+        if (msg.sender != owner) {
+            _spendAllowance(owner, msg.sender, shares);
+        }
+
+        // The amount that cannot be withdrawn at the moment.
+        uint256 remainingAssets = assets;
+
+        // Withdraw from the reserve.
+        uint256 reserve = $.underlyingToken.balanceOf(address(this));
+
+        if (reserve >= remainingAssets) {
+            _burn(owner, shares);
+            $.underlyingToken.safeTransfer(receiver, assets);
+            emit IERC4626.Withdraw(msg.sender, receiver, owner, assets, shares);
+            return shares;
+        } else {
+            remainingAssets -= reserve;
+        }
+
+        // Withdraw from the yield vault.
+        uint256 maxWithdraw_ = $.yieldVault.maxWithdraw(address(this));
+        maxWithdraw_ = remainingAssets > maxWithdraw_ ? maxWithdraw_ : remainingAssets;
+
         if (maxWithdraw_ > 0) {
-            yieldGeneratingVault().withdraw(maxWithdraw_, receiver, address(this));
-            if (assets == maxWithdraw_) {
-                _burn(owner, originalAmount);
-                underlyingToken().safeTransfer(receiver, originalAmount);
-                return originalAmount;
+            $.yieldVault.withdraw(maxWithdraw_, receiver, address(this));
+            if (remainingAssets == maxWithdraw_) {
+                _burn(owner, shares);
+                emit IERC4626.Withdraw(msg.sender, receiver, owner, assets, shares);
+                return shares;
             }
             assets -= maxWithdraw_;
         }
 
-        revert("WITHDRAWAL_TOO_LARGE");
+        revert("AMOUNT_TOO_LARGE");
     }
 
-    function _withdrawable(uint256 amount, bool force) internal view returns (uint256) {
-        uint256 originalAmount = amount;
-
-        // Attempt to withdraw from the reserve first
-        uint256 currentBalance = underlyingToken().balanceOf(address(this));
-
-        if (currentBalance >= amount) {
-            return originalAmount;
-        } else {
-            amount -= currentBalance;
-        }
-
-        // Withdraw the remaining amount from the vault
-
-        uint256 maxWithdraw_ = yieldGeneratingVault().maxWithdraw(address(this));
-        maxWithdraw_ = amount > maxWithdraw_ ? maxWithdraw_ : amount;
-
-        // 2. always return USDC from the vault (if there's any)
-        if (amount == maxWithdraw_) return originalAmount;
-        amount -= maxWithdraw_;
-
-        if (force && amount > 0) revert("WITHDRAWAL_TOO_LARGE");
-
-        return originalAmount - amount;
-    }
-
-    // @notice How much yeUSDC a specific user can burn. (Burning yeUSDC unlocks USDC).
+    /// @notice How much yeToken a specific user can burn. (Burning yeToken unlocks the underlying token).
     function maxRedeem(address owner) external view override returns (uint256 maxShares) {
-        return _withdrawable(balanceOf(owner), false);
+        return convertToShares(_simulateWithdrawal(convertToAssets(balanceOf(owner)), false));
     }
 
-    // @notice How much USDC would be unlocked if a specific amount of yeUSDC were burned right now.
+    /// @notice How much underlying token would be unlocked if a specific amount of yeToken were burned right now.
     function previewRedeem(uint256 shares) external view override returns (uint256 assets) {
-        return _withdrawable(shares, true);
+        return _simulateWithdrawal(convertToAssets(shares), true);
     }
 
-    // @notice Burn a specific amount of yeUSDC and unlock the same amount of USDC.
+    /// @notice Burn a specific amount of yeToken and unlock a respective amount of the underlying token.
     function redeem(uint256 shares, address receiver, address owner) external override returns (uint256 assets) {
-        // @todo Check if the owner allowed the sender to redeem on their behalf.
+        // Set the return value.
+        assets = convertToAssets(shares);
 
-        return withdraw(shares, receiver, owner);
+        // Burn yeToken.
+        uint256 redeemedShares = withdraw(assets, receiver, owner);
+
+        // Check output.
+        require(redeemedShares >= shares, "INSUFFICIENT_REDEEM");
     }
 
     /// @notice Refills the USDC reserve by withdrawing USDC from the yield generating vault, if the reserve is below the minimum threshold.
@@ -364,9 +420,9 @@ abstract contract YieldExposedToken is CommonAdminOwner, IERC4626, ERC20PermitUp
 
         if (currentReserve < targetReserve) {
             uint256 shortfall = targetReserve - currentReserve;
-            uint256 maxWithdraw_ = yieldGeneratingVault().maxWithdraw(address(this));
+            uint256 maxWithdraw_ = yieldVault().maxWithdraw(address(this));
             uint256 amountToWithdraw = shortfall > maxWithdraw_ ? maxWithdraw_ : shortfall;
-            yieldGeneratingVault().withdraw(amountToWithdraw, address(this), address(this));
+            yieldVault().withdraw(amountToWithdraw, address(this), address(this));
         } else {
             revert("NO_NEED_TO_REPLANISH_RESERVE");
         }
@@ -375,15 +431,16 @@ abstract contract YieldExposedToken is CommonAdminOwner, IERC4626, ERC20PermitUp
     }
 
     /// @notice Transfers yield generating vault shares worth of excess USDC backing to the yield recipient.
-    function accrueYield() external whenNotPaused {
+    /// @notice Please claim any outstanding messages from Native Converters from L2s before calling this function.
+    function accrueYield() external whenNotPaused onlyOwner {
         uint256 currentReserve = underlyingToken().balanceOf(address(this));
         uint256 targetReserve = (totalSupply() * minReservePercentage()) / 100;
 
         if (currentReserve > targetReserve) {
             uint256 excess = currentReserve - targetReserve;
-            uint256 maxDeposit_ = yieldGeneratingVault().maxDeposit(address(this));
+            uint256 maxDeposit_ = yieldVault().maxDeposit(address(this));
             excess = excess > maxDeposit_ ? maxDeposit_ : excess;
-            yieldGeneratingVault().deposit(excess, address(this));
+            yieldVault().deposit(excess, address(this));
         }
 
         uint256 totalAssets_ = totalAssets();
@@ -394,13 +451,15 @@ abstract contract YieldExposedToken is CommonAdminOwner, IERC4626, ERC20PermitUp
         if (totalAssets_ > totalSupply()) {
             uint256 excess = totalAssets_ - totalSupply();
             // @todo Check whether fluctuations in liquidity affect the conversion rate.
-            shares = yieldGeneratingVault().convertToShares(excess);
-            yieldGeneratingVault().transfer(yieldRecipient(), shares);
+            shares = yieldVault().convertToShares(excess);
+            yieldVault().transfer(yieldRecipient(), shares);
         } else {
             revert("NO_YIELD");
         }
 
         emit YieldAccrued(yieldRecipient(), shares);
+
+        // @todo Replenish the reserve before accruing yield.
     }
 
     /// @dev Native Converter on an L2 calls both `bridgeAsset` and `bridgeMessage` on `migrate`.
@@ -440,7 +499,7 @@ abstract contract YieldExposedToken is CommonAdminOwner, IERC4626, ERC20PermitUp
         uint256 amount,
         bytes calldata metadata
     ) external whenNotPaused {
-        uint256 currentBalance = IERC20Plus(address(this)).balanceOf(destinationAddress);
+        uint256 currentBalance = IERC20(address(this)).balanceOf(destinationAddress);
 
         lxlyBridge().claimAsset(
             smtProof,
@@ -455,22 +514,25 @@ abstract contract YieldExposedToken is CommonAdminOwner, IERC4626, ERC20PermitUp
             metadata
         );
 
-        uint256 newBalance = IERC20Plus(address(this)).balanceOf(destinationAddress);
+        uint256 newBalance = IERC20(address(this)).balanceOf(destinationAddress);
 
         uint256 difference = newBalance - currentBalance;
 
+        // @todo Change this to a `withdraw` call.
         if (difference > 0) {
             _burn(destinationAddress, difference);
             underlyingToken().safeTransfer(destinationAddress, difference);
         }
-
-        emit USDCClaimed(destinationAddress, difference);
     }
 
-    /// @notice The number of decimals of the yield exposed token.
-    /// @notice The number of decimals is the same as that of the underlying token.
-    function decimals() public view virtual override(ERC20Upgradeable, IERC20Metadata) returns (uint8) {
-        return _getYieldExposedTokenStorage().decimals;
+    /// @notice Prevents usage of functions with the `whenNotPaused` modifier.
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    /// @notice Allowes usage of functions with the `whenNotPaused` modifier.
+    function unpause() external onlyOwner {
+        _unpause();
     }
 
     /**
@@ -484,6 +546,7 @@ abstract contract YieldExposedToken is CommonAdminOwner, IERC4626, ERC20PermitUp
 }
 
 interface IPolygonZkEVMBridge {
+    function networkID() external view returns (uint32);
     function bridgeAsset(
         uint32 destinationNetwork,
         address destinationAddress,
