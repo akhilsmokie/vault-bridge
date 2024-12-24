@@ -170,7 +170,7 @@ abstract contract YieldExposedToken is
     }
 
     /// @notice yeToken is backed 1:1 by the underlying token.
-    /// @dev Caution: This function determines the amount of the underlying token the other ERC-4626 functions transfer from or to recipient when working with yeToken.
+    /// @dev Caution: This function determines the amount of the underlying token the other ERC-4626 functions transfer to or from the receiver when working with yeToken.
     function convertToAssets(uint256 shares) public pure override returns (uint256 assets) {
         assets = shares;
     }
@@ -246,13 +246,13 @@ abstract contract YieldExposedToken is
 
         // Mint yeToken.
         if (destinationNetworkId != $.lxlyId) {
-            // Mint to self and bridge to the recipient.
+            // Mint to self and bridge to the receiver.
             _mint(address(this), shares);
             lxlyBridge().bridgeAsset(
                 destinationNetworkId, destinationAddress, shares, address(this), forceUpdateGlobalExitRoot, ""
             );
         } else {
-            // Mint to the recipient.
+            // Mint to the receiver.
             _mint(destinationAddress, shares);
         }
 
@@ -297,7 +297,7 @@ abstract contract YieldExposedToken is
         // Set the return value.
         assets = convertToAssets(shares);
 
-        // Mint yeToken to the recipient.
+        // Mint yeToken to the receiver.
         uint256 mintedShares = _deposit(assets, $.lxlyId, receiver, false);
 
         // Check output.
