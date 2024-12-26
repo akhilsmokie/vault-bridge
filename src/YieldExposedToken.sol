@@ -21,6 +21,7 @@ import {ILxLyBridge} from "./etc/ILxLyBridge.sol";
 /// @title Yield Exposed Token
 /// @dev A base contract to create yield exposed tokens.
 // @todo Account for possible fees on transfers of the underlying token.
+// @todo Handle different decimals.
 abstract contract YieldExposedToken is
     Initializable,
     OwnableUpgradeable,
@@ -34,7 +35,7 @@ abstract contract YieldExposedToken is
      * @dev Storage of the YieldExposedToken contract.
      * @dev It's implemented on a custom ERC-7201 namespace to reduce the risk of storage collisions when using with upgradeable contracts.
      * @custom:storage-location erc7201:0xpolygon.storage.YieldExposedToken
-     * @param minimumReservePercentage 1 is 1%. The reserve is based on the total supply of yeToken, and may not account for uncompleted migrations from L2s. Please refer to `accrueYield` for more information.
+     * @param minimumReservePercentage 1 is 1%. The reserve is based on the total supply of yeToken, and may not account for uncompleted migrations of backing from L2s. Please refer to `accrueYield` for more information.
      */
     struct YieldExposedTokenStorage {
         IERC20 underlyingToken;
@@ -44,7 +45,6 @@ abstract contract YieldExposedToken is
         address yieldRecipient;
         ILxLyBridge lxlyBridge;
         uint32 lxlyId;
-        address nativeConverter;
         address migrationManager;
     }
 
@@ -70,7 +70,6 @@ abstract contract YieldExposedToken is
         address yieldVault_,
         address yieldRecipient_,
         address lxlyBridge_,
-        address nativeConverter_,
         address migrationManager_
     ) external initializer {
         require(owner_ != address(0), "INVALID_OWNER");
@@ -81,7 +80,6 @@ abstract contract YieldExposedToken is
         require(yieldVault_ != address(0), "INVALID_VAULT");
         require(yieldRecipient_ != address(0), "INVALID_BENEFICIARY");
         require(lxlyBridge_ != address(0), "INVALID_BRIDGE");
-        require(nativeConverter_ != address(0), "INVALID_CONVERTER");
         require(migrationManager_ != address(0), "INVALID_MIGRATION_MANAGER");
 
         __ERC20_init(name_, symbol_);
@@ -99,7 +97,6 @@ abstract contract YieldExposedToken is
         $.yieldRecipient = yieldRecipient_;
         $.lxlyBridge = ILxLyBridge(lxlyBridge_);
         $.lxlyId = ILxLyBridge(lxlyBridge_).networkID();
-        $.nativeConverter = nativeConverter_;
         $.migrationManager = migrationManager_;
 
         IERC20(underlyingToken_).approve(yieldVault_, type(uint256).max);
@@ -114,7 +111,7 @@ abstract contract YieldExposedToken is
 
     /// @notice Yield exposed tokens have an internal reserve of the underlying token from which withdrawals are serviced first.
     /// @notice When the reserve is below the minimum threshold, it can be replenished by calling `replenishReserve`.
-    function minReservePercentage() public view returns (uint256) {
+    function minimumReservePercentage() public view returns (uint256) {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
         return $.minimumReservePercentage;
     }
@@ -137,11 +134,11 @@ abstract contract YieldExposedToken is
         return $.lxlyBridge;
     }
 
-    /// @notice The address of Native Converter on L2s.
-    /// @dev Used for authentication in cross-chain communications.
-    function nativeConverter() public view returns (address) {
+    /// @notice The address of Migration Manager for this yeToken.
+    /// @notice Migration Manager on the L1 is used in combination with Native Converter on L2s to migrate backing of yeToken from L2s to the L1. This is because Native Converters can mint the custom token on L2s.
+    function migrationManager() public view returns (address) {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
-        return $.nativeConverter;
+        return $.migrationManager;
     }
 
     /// @notice The underlying token that backs yeToken.
@@ -153,32 +150,39 @@ abstract contract YieldExposedToken is
     /// @notice The total backing of yeToken in the underlying token.
     /// @notice May be less that the actual amount if backing in Native Converter on L2s hasn't been migrated to the L1 yet.
     function totalAssets() public view override returns (uint256 totalManagedAssets) {
-        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
-
-        return $.underlyingToken.balanceOf(address(this))
-            + $.yieldVault.convertToAssets($.yieldVault.balanceOf(address(this)));
+        return stakedAssets() + reservedAssets();
     }
 
-    /// @notice yeToken is backed 1:1 by the underlying token.
-    /// @dev Caution: This function determines the amount of yeToken the other ERC-4626 functions mint or burn when working with the underlying token.
-    function convertToShares(uint256 assets) public pure override returns (uint256 shares) {
-        shares = assets;
+    /// @notice Tells how much a specific amount of underlying token is worth in yeToken.
+    function convertToShares(uint256 assets) external pure override returns (uint256 shares) {
+        return _convertToShares(assets);
     }
 
     /// @notice yeToken is backed 1:1 by the underlying token.
     /// @dev Caution: This function determines the amount of the underlying token the other ERC-4626 functions transfer to or from the receiver when working with yeToken.
-    function convertToAssets(uint256 shares) public pure override returns (uint256 assets) {
+    function _convertToShares(uint256 assets) internal pure returns (uint256 shares) {
+        shares = assets;
+    }
+
+    /// @notice Tells how much a specific amount of yeToken is worth in the underlying token.
+    function convertToAssets(uint256 shares) external pure override returns (uint256 assets) {
+        return _convertToAssets(shares);
+    }
+
+    /// @notice yeToken is backed 1:1 by the underlying token.
+    /// @dev Caution: This function determines the amount of the underlying token the other ERC-4626 functions transfer to or from the receiver when working with yeToken.
+    function _convertToAssets(uint256 shares) internal pure returns (uint256 assets) {
         assets = shares;
     }
 
     /// @notice How much underlying token a specific user can deposit. (Depositing the underlying token mints yeToken).
-    function maxDeposit(address) external view override whenNotPaused returns (uint256 maxAssets) {
+    function maxDeposit(address) external pure override returns (uint256 maxAssets) {
         return type(uint256).max;
     }
 
     /// @notice How much yeToken would be minted if a specific amount of the underlying token were deposited right now.
     function previewDeposit(uint256 assets) external view override whenNotPaused returns (uint256 shares) {
-        return convertToShares(assets);
+        return _convertToShares(assets);
     }
 
     /// @notice Deposit a specific amount of the underlying token and get yeToken.
@@ -221,7 +225,7 @@ abstract contract YieldExposedToken is
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
 
         // Set the return value.
-        shares = convertToShares(assets);
+        shares = _convertToShares(assets);
 
         // Check input.
         require(assets > 0, "INVALID_AMOUNT");
@@ -277,14 +281,14 @@ abstract contract YieldExposedToken is
     }
 
     /// @notice How much yeToken a specific user can mint. (Minting yeToken locks the underlying token).
-    function maxMint(address) external view override whenNotPaused returns (uint256 maxShares) {
+    function maxMint(address) external pure override returns (uint256 maxShares) {
         return type(uint256).max;
     }
 
     /// @notice How much underlying token would be required to mint a specific amount of yeToken right now.
     /// @dev This function does not revert.
     function previewMint(uint256 shares) external view override whenNotPaused returns (uint256 assets) {
-        return convertToAssets(shares);
+        return _convertToAssets(shares);
     }
 
     /// @notice Mint a specific amount of yeToken by depositing a required amount of the underlying token.
@@ -292,7 +296,7 @@ abstract contract YieldExposedToken is
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
 
         // Set the return value.
-        assets = convertToAssets(shares);
+        assets = _convertToAssets(shares);
 
         // Mint yeToken to the receiver.
         uint256 mintedShares = _deposit(assets, $.lxlyId, receiver, false);
@@ -302,8 +306,8 @@ abstract contract YieldExposedToken is
     }
 
     /// @notice How much underlying token a specific user can withdraw. (Withdrawing the underlying token burns yeToken).
-    function maxWithdraw(address owner) external view override whenNotPaused returns (uint256 maxAssets) {
-        return _simulateWithdrawal(convertToAssets(balanceOf(owner)), false);
+    function maxWithdraw(address owner) external view override returns (uint256 maxAssets) {
+        return _simulateWithdrawal(_convertToAssets(balanceOf(owner)), false);
     }
 
     /// @notice How much yeToken would be burned if a specific amount of the underlying token were withdrawn right now.
@@ -316,18 +320,16 @@ abstract contract YieldExposedToken is
     /// @param assets The maximum amount of the underlying token to simulate a withdrawal for.
     /// @param force Whether to enforce the amount, reverting if it cannot be met.
     function _simulateWithdrawal(uint256 assets, bool force) internal view returns (uint256 withdrawableAssets) {
-        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
-
         // The amount that cannot be withdrawn at the moment.
         uint256 remainingAssets = assets;
 
         // Simulate withdrawal from the reserve.
-        uint256 reserve = $.underlyingToken.balanceOf(address(this));
+        uint256 reserve_ = reservedAssets();
 
-        if (reserve >= remainingAssets) {
+        if (reserve_ >= remainingAssets) {
             return assets;
         } else {
-            remainingAssets -= reserve;
+            remainingAssets -= reserve_;
         }
 
         // Simulate withdrawal from the yield vault.
@@ -359,7 +361,7 @@ abstract contract YieldExposedToken is
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
 
         // Set the return value.
-        shares = convertToShares(assets);
+        shares = _convertToShares(assets);
 
         // Check input.
         if (msg.sender != owner) {
@@ -370,15 +372,15 @@ abstract contract YieldExposedToken is
         uint256 remainingAssets = assets;
 
         // Withdraw from the reserve.
-        uint256 reserve = $.underlyingToken.balanceOf(address(this));
+        uint256 reserve_ = reservedAssets();
 
-        if (reserve >= remainingAssets) {
+        if (reserve_ >= remainingAssets) {
             _burn(owner, shares);
             $.underlyingToken.safeTransfer(receiver, assets);
             emit IERC4626.Withdraw(msg.sender, receiver, owner, assets, shares);
             return shares;
         } else {
-            remainingAssets -= reserve;
+            remainingAssets -= reserve_;
         }
 
         // Withdraw from the yield vault.
@@ -398,113 +400,8 @@ abstract contract YieldExposedToken is
         revert("AMOUNT_TOO_LARGE");
     }
 
-    /// @notice How much yeToken a specific user can burn. (Burning yeToken unlocks the underlying token).
-    function maxRedeem(address owner) external view override whenNotPaused returns (uint256 maxShares) {
-        return convertToShares(_simulateWithdrawal(convertToAssets(balanceOf(owner)), false));
-    }
-
-    /// @notice How much underlying token would be unlocked if a specific amount of yeToken were burned right now.
-    function previewRedeem(uint256 shares) external view override whenNotPaused returns (uint256 assets) {
-        return _simulateWithdrawal(convertToAssets(shares), true);
-    }
-
-    /// @notice Burn a specific amount of yeToken and unlock a respective amount of the underlying token.
-    function redeem(uint256 shares, address receiver, address owner)
-        external
-        override
-        whenNotPaused
-        returns (uint256 assets)
-    {
-        // Set the return value.
-        assets = convertToAssets(shares);
-
-        // Burn yeToken.
-        uint256 redeemedShares = _withdraw(assets, receiver, owner);
-
-        // Check output.
-        require(redeemedShares >= shares, "INSUFFICIENT_REDEEM");
-    }
-
-    /// @notice Refill the internal reserve of the underlying token by withdrawing from the yield vault.
-    /// @notice This function can be called by anyone.
-    function replenishReserve() public whenNotPaused {
-        _rebalanceReserve(true);
-    }
-
-    /// @notice Rebalances the internal reserve by withdrawing the underlying token from, or depositing the underlying token into, the yield vault.
-    /// @param force Whether to revert if the reserve cannot be rebalanced.
-    function _rebalanceReserve(bool force) public {
-        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
-
-        // Caclulate the minimum reserve amount.
-        uint256 reserve = $.underlyingToken.balanceOf(address(this));
-        uint256 minimumReserve = (totalSupply() * $.minimumReservePercentage) / 100;
-
-        // Check if the reserve is below, above, or at the minimum threshold.
-        if (reserve < minimumReserve) {
-            // Calculate how much to withdraw.
-            uint256 shortfall = minimumReserve - reserve;
-            uint256 maxWithdraw_ = $.yieldVault.maxWithdraw(address(this));
-            uint256 assetsToWithdraw = shortfall > maxWithdraw_ ? maxWithdraw_ : shortfall;
-
-            // Withdraw from the yield vault.
-            if (assetsToWithdraw > 0) {
-                $.yieldVault.withdraw(maxWithdraw_, address(this), address(this));
-                // Emit the event.
-                emit ReserveRebalanced($.underlyingToken.balanceOf(address(this)));
-            } else if (force) {
-                revert("CANNOT_REBALANCE_RESERVE_AT_THIS_MOMENT");
-            }
-        } else if (reserve > minimumReserve) {
-            // Calculate how much to deposit.
-            uint256 excess = reserve - minimumReserve;
-            uint256 maxDeposit_ = $.yieldVault.maxDeposit(address(this));
-            uint256 assetsToDeposit = excess > maxDeposit_ ? maxDeposit_ : excess;
-
-            // Deposit into the yield vault.
-            if (assetsToDeposit > 0) {
-                $.yieldVault.deposit(assetsToDeposit, address(this));
-                // Emit the event.
-                emit ReserveRebalanced($.underlyingToken.balanceOf(address(this)));
-            } else if (force) {
-                revert("CANNOT_REBALANCE_RESERVE_AT_THIS_MOMENT");
-            }
-        } else if (force) {
-            revert("NO_NEED_TO_REBALANCE_RESERVE");
-        }
-    }
-
-    /// @notice Transfers yield generated by the yield vault to the yield recipient in the form of the underlying token.
-    /// @notice This function can be called by the owner only.
-    /// @param rebalanceReserve Whether to rebalance the reserve before accruing yield.
-    function accrueYield(bool rebalanceReserve) external whenNotPaused onlyOwner {
-        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
-
-        // Try to rebalance the reserve.
-        if (rebalanceReserve) _rebalanceReserve(false);
-
-        // Calculate the yield.
-        // The formula is: yield = assets reported by yield vault - (yeToken total supply - reserve)
-        uint256 yield = $.yieldVault.convertToAssets($.yieldVault.balanceOf(address(this)))
-            - (totalSupply() - $.underlyingToken.balanceOf(address(this)));
-
-        if (yield > 0) {
-            // Calculate the amount to withdraw.
-            uint256 maxWithdraw_ = $.yieldVault.maxWithdraw(address(this));
-            uint256 amountToWithdraw = yield > maxWithdraw_ ? maxWithdraw_ : yield;
-
-            // Withdraw the yield to the yield recipient.
-            $.yieldVault.withdraw(amountToWithdraw, $.yieldRecipient, address(this));
-
-            // Emit the event.
-            emit YieldAccrued(yieldRecipient(), amountToWithdraw);
-        } else {
-            revert("NO_YIELD");
-        }
-    }
-
-    /// @notice Claim yeToken from LxLy Bridge and withdraw the underlying token to the destination address.
-    function claimUnderlyingToken(
+    /// @notice Claim yeToken from LxLy Bridge and withdraw the underlying token.
+    function claimAndWithdraw(
         bytes32[32] calldata smtProof,
         uint32 index,
         bytes32 mainnetExitRoot,
@@ -531,7 +428,124 @@ abstract contract YieldExposedToken is
         );
 
         // Withdraw the underlying token to the destination address.
-        _withdraw(convertToAssets(amount), destinationAddress, address(this));
+        _withdraw(_convertToAssets(amount), destinationAddress, address(this));
+    }
+
+    /// @notice How much yeToken a specific user can burn. (Burning yeToken unlocks the underlying token).
+    function maxRedeem(address owner) external view override returns (uint256 maxShares) {
+        return _convertToShares(_simulateWithdrawal(_convertToAssets(balanceOf(owner)), false));
+    }
+
+    /// @notice How much underlying token would be unlocked if a specific amount of yeToken were burned right now.
+    function previewRedeem(uint256 shares) external view override whenNotPaused returns (uint256 assets) {
+        return _simulateWithdrawal(_convertToAssets(shares), true);
+    }
+
+    /// @notice Burn a specific amount of yeToken and unlock a respective amount of the underlying token.
+    function redeem(uint256 shares, address receiver, address owner)
+        external
+        override
+        whenNotPaused
+        returns (uint256 assets)
+    {
+        // Set the return value.
+        assets = _convertToAssets(shares);
+
+        // Burn yeToken.
+        uint256 redeemedShares = _withdraw(assets, receiver, owner);
+
+        // Check output.
+        require(redeemedShares >= shares, "INSUFFICIENT_REDEEM");
+    }
+
+    /// @notice Refill the internal reserve of the underlying token by withdrawing from the yield vault.
+    /// @notice This function can be called by anyone.
+    function replenishReserve() public whenNotPaused {
+        _rebalanceReserve(true);
+    }
+
+    /// @notice Rebalances the internal reserve by withdrawing the underlying token from, or depositing the underlying token into, the yield vault.
+    /// @param force Whether to revert if the reserve cannot be rebalanced.
+    function _rebalanceReserve(bool force) public {
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+
+        // Caclulate the minimum reserve amount.
+        uint256 reserve_ = reservedAssets();
+        uint256 minimumReserve = (totalSupply() * $.minimumReservePercentage) / 100;
+
+        // Check if the reserve is below, above, or at the minimum threshold.
+        if (reserve_ < minimumReserve) {
+            // Calculate how much to withdraw.
+            uint256 shortfall = minimumReserve - reserve_;
+            uint256 maxWithdraw_ = $.yieldVault.maxWithdraw(address(this));
+            uint256 assetsToWithdraw = shortfall > maxWithdraw_ ? maxWithdraw_ : shortfall;
+
+            // Withdraw from the yield vault.
+            if (assetsToWithdraw > 0) {
+                $.yieldVault.withdraw(maxWithdraw_, address(this), address(this));
+                // Emit the event.
+                emit ReserveRebalanced(reservedAssets());
+            } else if (force) {
+                revert("CANNOT_REBALANCE_RESERVE_AT_THIS_MOMENT");
+            }
+        } else if (reserve_ > minimumReserve) {
+            // Calculate how much to deposit.
+            uint256 excess = reserve_ - minimumReserve;
+            uint256 maxDeposit_ = $.yieldVault.maxDeposit(address(this));
+            uint256 assetsToDeposit = excess > maxDeposit_ ? maxDeposit_ : excess;
+
+            // Deposit into the yield vault.
+            if (assetsToDeposit > 0) {
+                $.yieldVault.deposit(assetsToDeposit, address(this));
+                // Emit the event.
+                emit ReserveRebalanced(reservedAssets());
+            } else if (force) {
+                revert("CANNOT_REBALANCE_RESERVE_AT_THIS_MOMENT");
+            }
+        } else if (force) {
+            revert("NO_NEED_TO_REBALANCE_RESERVE");
+        }
+    }
+
+    /// @notice Transfers yield generated by the yield vault to the yield recipient in the form of the underlying token.
+    /// @notice This function can be called by the owner only.
+    /// @param rebalanceReserve Whether to rebalance the reserve before accruing yield.
+    function accrueYield(bool rebalanceReserve) external whenNotPaused onlyOwner {
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+
+        // Try to rebalance the reserve.
+        if (rebalanceReserve) _rebalanceReserve(false);
+
+        // Calculate the yield.
+        // yield = assets reported by yield vault + reserve - yeToken total supply
+        uint256 yield = stakedAssets() + reservedAssets() - totalSupply();
+
+        if (yield > 0) {
+            // Calculate the amount to withdraw.
+            uint256 maxWithdraw_ = $.yieldVault.maxWithdraw(address(this));
+            uint256 amountToWithdraw = yield > maxWithdraw_ ? maxWithdraw_ : yield;
+
+            // Withdraw the yield to the yield recipient.
+            $.yieldVault.withdraw(amountToWithdraw, $.yieldRecipient, address(this));
+
+            // Emit the event.
+            emit YieldAccrued(yieldRecipient(), amountToWithdraw);
+        } else {
+            revert("NO_YIELD");
+        }
+    }
+
+    /// @notice The amount of the underlying token in the yield vault, as reported by the yield vault.
+    function stakedAssets() public view returns (uint256) {
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+        return $.yieldVault.convertToAssets($.yieldVault.balanceOf(address(this)));
+    }
+
+    /// @notice Yield exposed tokens have an internal reserve of the underlying token from which withdrawals are serviced first.
+    /// @notice The reserve can be refilled by calling `replenishReserve` when it is below the `minimumReservePercentage`.
+    function reservedAssets() public view returns (uint256) {
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+        return $.underlyingToken.balanceOf(address(this));
     }
 
     /// @notice Prevents usage of functions with the `whenNotPaused` modifier.
