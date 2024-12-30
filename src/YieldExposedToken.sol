@@ -524,7 +524,7 @@ abstract contract YieldExposedToken is
 
         // Caclulate the minimum reserve amount.
         uint256 reservedAssets_ = reservedAssets();
-        uint256 minimumReserve = (totalSupply() * $.minimumReservePercentage) / 100;
+        uint256 minimumReserve = _convertToAssets((totalSupply() * $.minimumReservePercentage) / 100);
 
         // Check if the reserve is below, above, or at the minimum threshold.
         if (reservedAssets_ < minimumReserve) {
@@ -592,8 +592,8 @@ abstract contract YieldExposedToken is
     /// @notice The amount of yield available for collection.
     function yield() public view returns (uint256) {
         // The formula for caclulating yield is:
-        // yield = assets reported by yield vault + reserve - yeToken total supply
-        return stakedAssets() + reservedAssets() - totalSupply();
+        // yield = assets reported by yield vault + reserve - yeToken total supply in assets
+        return stakedAssets() + reservedAssets() - _convertToAssets(totalSupply());
     }
 
     /// @notice The amount of the underlying token in the yield vault, as reported by the yield vault.
