@@ -11,7 +11,7 @@ import {YieldExposedToken} from "./YieldExposedToken.sol";
 import {ILxLyBridge} from "./etc/ILxLyBridge.sol";
 
 /// @title Migration Manager
-/// @notice The backing of the custom token on L2s that was minted on L2s is migrated via Native Converter to Migration Manager on the L1, which completes migrations by calling yeToken to mint and bridge yeToken to address zero on those L2s.
+/// @notice Backing for the custom token that was minted on an L2 by Native Converter is migrated to Migration Manager on the L1, which completes migrations by calling yeToken to mint and bridge yeToken to address zero on that L2.
 abstract contract MigrationManager is Initializable, OwnableUpgradeable, PausableUpgradeable {
     /// @dev Used in cross-network communication.
     enum CrossNetworkInstruction {
@@ -19,9 +19,9 @@ abstract contract MigrationManager is Initializable, OwnableUpgradeable, Pausabl
     }
 
     /**
-     * @dev Storage of the YieldExposedToken contract.
+     * @dev Storage of the Migration Manager contract.
      * @dev It's implemented on a custom ERC-7201 namespace to reduce the risk of storage collisions when using with upgradeable contracts.
-     * @custom:storage-location erc7201:0xpolygon.storage.YieldExposedToken
+     * @custom:storage-location erc7201:0xpolygon.storage.MigrationManager
      */
     struct MigrationManagerStorage {
         YieldExposedToken yeToken;
@@ -138,11 +138,13 @@ abstract contract MigrationManager is Initializable, OwnableUpgradeable, Pausabl
     }
 
     /// @notice Prevents usage of functions with the `whenNotPaused` modifier.
+    /// @notice This function can be called by the owner only.
     function pause() external onlyOwner {
         _pause();
     }
 
     /// @notice Allowes usage of functions with the `whenNotPaused` modifier.
+    /// @notice This function can be called by the owner only.
     function unpause() external onlyOwner {
         MigrationManagerStorage storage $ = _getMigrationManagerStorage();
 

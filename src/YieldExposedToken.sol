@@ -32,7 +32,7 @@ abstract contract YieldExposedToken is
     using SafeERC20 for IERC20;
 
     /**
-     * @dev Storage of the YieldExposedToken contract.
+     * @dev Storage of the Yield Exposed Token contract.
      * @dev It's implemented on a custom ERC-7201 namespace to reduce the risk of storage collisions when using with upgradeable contracts.
      * @custom:storage-location erc7201:0xpolygon.storage.YieldExposedToken
      * @param minimumReservePercentage 1 is 1%. The reserve is based on the total supply of yeToken, and may not account for uncompleted migrations of backing from L2s to the L1. Please refer to `completeMigration` for more information.
@@ -656,11 +656,13 @@ abstract contract YieldExposedToken is
     }
 
     /// @notice Prevents usage of functions with the `whenNotPaused` modifier.
+    /// @notice This function can be called by the owner only.
     function pause() external onlyOwner {
         _pause();
     }
 
     /// @notice Allowes usage of functions with the `whenNotPaused` modifier.
+    /// @notice This function can be called by the owner only.
     function unpause() external onlyOwner {
         _unpause();
     }
