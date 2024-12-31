@@ -73,6 +73,7 @@ abstract contract YieldExposedToken is
         address lxlyBridge_,
         address migrationManager_
     ) external initializer {
+        // Check the inputs.
         require(owner_ != address(0), "INVALID_OWNER");
         require(bytes(name_).length > 0, "INVALID_NAME");
         require(bytes(symbol_).length > 0, "INVALID_SYMBOL");
@@ -83,6 +84,7 @@ abstract contract YieldExposedToken is
         require(lxlyBridge_ != address(0), "INVALID_BRIDGE");
         require(migrationManager_ != address(0), "INVALID_MIGRATION_MANAGER");
 
+        // Initialize the inherited contracts.
         __ERC20_init(name_, symbol_);
         __ERC20Permit_init(name_);
 
@@ -91,6 +93,7 @@ abstract contract YieldExposedToken is
 
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
 
+        // Initialize the storage.
         $.underlyingToken = IERC20(underlyingToken_);
         $.decimals = IERC20Metadata(underlyingToken_).decimals();
         $.minimumReservePercentage = minimumReservePercentage_;
@@ -100,6 +103,7 @@ abstract contract YieldExposedToken is
         $.lxlyId = ILxLyBridge(lxlyBridge_).networkID();
         $.migrationManager = migrationManager_;
 
+        // Approve the yield vault and LxLy Bridge.
         IERC20(underlyingToken_).approve(yieldVault_, type(uint256).max);
         _approve(address(this), address(lxlyBridge_), type(uint256).max);
     }
@@ -688,7 +692,7 @@ abstract contract YieldExposedToken is
     /// @dev Fee: 2% flat
     /// @dev Input:  `100`
     /// @dev Output: `102`
-    /// @param minimumAssetsAfterTransferFee It is not always mathematically possible to calculate the assets before a transfer fee (because of fee tiers, etc.). In those cases, the output should be the closest higher amount.
+    /// @param minimumAssetsAfterTransferFee It may not always be mathematically possible to calculate the assets before a transfer fee (because of fee tiers, etc). In those cases, the output should be the closest higher amount.
     function _assetsBeforeTransferFee(uint256 minimumAssetsAfterTransferFee) internal view virtual returns (uint256);
 }
 
