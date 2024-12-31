@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import {Initializable} from "@openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 import {OwnableUpgradeable} from "@openzeppelin-contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {PausableUpgradeable} from "@openzeppelin-contracts-upgradeable/utils/PausableUpgradeable.sol";
+import {IVersioned} from "./etc/IVersioned.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Plus} from "./etc/IERC20Plus.sol";
@@ -13,7 +14,7 @@ import {ILxLyBridge} from "./etc/ILxLyBridge.sol";
 /// @title Native Converter
 /// @notice Native Converter lives on L2s and converts the bridge-wrapped underlying token to the custom token on demand, and vice versa, and can migrate backing of the custom token it has minted on an L2 to the L1.
 /// @dev This contract must have mint and burn permissions on the custom token.
-abstract contract NativeConverter is Initializable, OwnableUpgradeable, PausableUpgradeable {
+abstract contract NativeConverter is Initializable, OwnableUpgradeable, PausableUpgradeable, IVersioned {
     /// @dev Used in cross-network communication.
     enum CrossNetworkInstruction {
         COMPLETE_MIGRATION
@@ -154,6 +155,11 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         assembly {
             $.slot := _NATIVE_CONVERTER_STORAGE
         }
+    }
+
+    /// @inheritdoc IVersioned
+    function version() external pure virtual returns (string memory) {
+        return "1.0.0";
     }
 }
 

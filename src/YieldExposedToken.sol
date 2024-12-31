@@ -8,6 +8,7 @@ import {ERC20PermitUpgradeable} from
 import {Initializable} from "@openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 import {OwnableUpgradeable} from "@openzeppelin-contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {PausableUpgradeable} from "@openzeppelin-contracts-upgradeable/utils/PausableUpgradeable.sol";
+import {IVersioned} from "./etc/IVersioned.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
@@ -27,7 +28,8 @@ abstract contract YieldExposedToken is
     OwnableUpgradeable,
     PausableUpgradeable,
     IERC4626,
-    ERC20PermitUpgradeable
+    ERC20PermitUpgradeable,
+    IVersioned
 {
     using SafeERC20 for IERC20;
 
@@ -61,6 +63,7 @@ abstract contract YieldExposedToken is
         _disableInitializers();
     }
 
+    /// @dev Do not forget to call `super.initialize` if overriding.
     /// @dev `decimals` will match the underlying token.
     function initialize(
         address owner_,
@@ -72,7 +75,7 @@ abstract contract YieldExposedToken is
         address yieldRecipient_,
         address lxlyBridge_,
         address migrationManager_
-    ) external initializer {
+    ) public virtual initializer {
         // Check the inputs.
         require(owner_ != address(0), "INVALID_OWNER");
         require(bytes(name_).length > 0, "INVALID_NAME");
@@ -147,7 +150,7 @@ abstract contract YieldExposedToken is
     }
 
     /// @notice The underlying token that backs yeToken.
-    function asset() external view override returns (address assetTokenAddress) {
+    function asset() public view override returns (address assetTokenAddress) {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
         return address($.underlyingToken);
     }
@@ -674,6 +677,11 @@ abstract contract YieldExposedToken is
         assembly {
             $.slot := _YIELD_EXPOSED_TOKEN_STORAGE
         }
+    }
+
+    /// @inheritdoc IVersioned
+    function version() external pure virtual returns (string memory) {
+        return "1.0.0";
     }
 
     /// @notice Accounts for the transfer fee of the underlying token.

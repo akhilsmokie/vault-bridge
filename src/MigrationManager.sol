@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import {Initializable} from "@openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 import {OwnableUpgradeable} from "@openzeppelin-contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {PausableUpgradeable} from "@openzeppelin-contracts-upgradeable/utils/PausableUpgradeable.sol";
+import {IVersioned} from "./etc/IVersioned.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -12,7 +13,7 @@ import {ILxLyBridge} from "./etc/ILxLyBridge.sol";
 
 /// @title Migration Manager
 /// @notice Backing for the custom token that was minted on an L2 by Native Converter is migrated to Migration Manager on the L1, which completes migrations by calling yeToken to mint and bridge yeToken to address zero on that L2.
-abstract contract MigrationManager is Initializable, OwnableUpgradeable, PausableUpgradeable {
+abstract contract MigrationManager is Initializable, OwnableUpgradeable, PausableUpgradeable, IVersioned {
     /// @dev Used in cross-network communication.
     enum CrossNetworkInstruction {
         COMPLETE_MIGRATION
@@ -168,6 +169,11 @@ abstract contract MigrationManager is Initializable, OwnableUpgradeable, Pausabl
         assembly {
             $.slot := _MIGRATION_MANAGER_STORAGE
         }
+    }
+
+    /// @inheritdoc IVersioned
+    function version() external pure virtual returns (string memory) {
+        return "1.0.0";
     }
 
     /// @notice Accounts for the transfer fee of the underlying token.
