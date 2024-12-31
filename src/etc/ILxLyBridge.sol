@@ -23,4 +23,10 @@ interface ILxLyBridge {
         uint256 amount,
         bytes calldata metadata
     ) external;
+    function bridgeMessage(
+        uint32 destinationNetwork,
+        address destinationAddress,
+        bool forceUpdateGlobalExitRoot,
+        bytes calldata metadata
+    ) external payable;
 }
