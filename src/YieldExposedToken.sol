@@ -209,14 +209,15 @@ abstract contract YieldExposedToken is
     /// @notice Deposit a specific amount of the underlying token, and bridge yeToken to an L2.
     // dev If yeToken is custom mapped on LxLy Bridge on the L2, the user will receive the custom token. If not, they will receive wrapped yeToken.
     /// @dev Uses EIP-2612 permit to transfer the underlying token from the sender to itself.
-    function depositAndBridge(
+    function depositAndBridgePermit(
         uint256 assets,
         address destinationAddress,
         uint32 destinationNetworkId,
         bool forceUpdateGlobalExitRoot,
         bytes calldata permitData
     ) external whenNotPaused returns (uint256 shares) {
-        (shares,) = _deposit(assets, permitData, destinationNetworkId, destinationAddress, forceUpdateGlobalExitRoot, 0);
+        (shares,) =
+            _depositPermit(assets, permitData, destinationNetworkId, destinationAddress, forceUpdateGlobalExitRoot, 0);
     }
 
     /// @notice Locks the underlying token, mints yeToken, and optionally bridges it to an L2.
@@ -282,7 +283,7 @@ abstract contract YieldExposedToken is
 
     /// @notice Locks the underlying token, mints yeToken, and optionally bridges it to an L2.
     /// @dev Uses EIP-2612 permit to transfer the underlying token from the sender to itself.
-    function _deposit(
+    function _depositPermit(
         uint256 assets,
         bytes calldata permitData,
         uint32 destinationNetworkId,
@@ -680,7 +681,7 @@ abstract contract YieldExposedToken is
     /**
      * @dev Returns a pointer to the ERC-7201 storage namespace.
      */
-    function _getYieldExposedTokenStorage() private pure returns (YieldExposedTokenStorage storage $) {
+    function _getYieldExposedTokenStorage() internal pure returns (YieldExposedTokenStorage storage $) {
         assembly {
             $.slot := _YIELD_EXPOSED_TOKEN_STORAGE
         }
