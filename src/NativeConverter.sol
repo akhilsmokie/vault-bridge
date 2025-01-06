@@ -109,6 +109,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         _deconvert(amount, destinationAddress, forceUpdateGlobalExitRoot);
     }
 
+    /// @notice Burns the custom token and unlocks the wrapped underlying token or bridges it to the destination address on the L1.
     function _deconvert(uint256 amount, address destinationAddress, bool forceUpdateGlobalExitRoot) internal {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
 
