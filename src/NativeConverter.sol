@@ -97,6 +97,19 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
     /// @notice Burns the custom token and unlocks the wrapped underlying token.
     /// @notice Transfer fees of the custom token may apply.
     function deconvert(uint256 amount) external whenNotPaused {
+        _deconvert(amount, address(0), false);
+    }
+
+    /// @notice Burns the custom token and bridges the wrapped underlying token to the destination address on the L1.
+    /// @notice Transfer fees of the custom token may apply.
+    function deconvertAndBridgeBack(uint256 amount, address destinationAddress, bool forceUpdateGlobalExitRoot)
+        external
+        whenNotPaused
+    {
+        _deconvert(amount, destinationAddress, forceUpdateGlobalExitRoot);
+    }
+
+    function _deconvert(uint256 amount, address destinationAddress, bool forceUpdateGlobalExitRoot) internal {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
 
         // Transfer the custom token from the caller to itself.
@@ -107,8 +120,21 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         // Burn the custom token.
         $.customToken.burn(msg.sender, amount);
 
-        // Transfer the wrapped underlying token to the caller.
-        $.wrappedUnderlyingToken.transfer(msg.sender, amount);
+        // If no address is specified, deconvert without bridging.
+        if (destinationAddress == address(0)) {
+            // Transfer the wrapped underlying token to the caller.
+            $.wrappedUnderlyingToken.transfer(msg.sender, amount);
+        } else {
+            // Bridge the wrapped underlying token to the destination address on the L1.
+            $.lxlyBridge.bridgeAsset(
+                $.l1NetworkID,
+                destinationAddress,
+                amount,
+                address($.wrappedUnderlyingToken),
+                forceUpdateGlobalExitRoot,
+                ""
+            );
+        }
 
         // Update the backing for migration.
         $.unmigratedBacking -= amount;
