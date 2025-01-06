@@ -496,6 +496,17 @@ abstract contract YieldExposedToken is
         uint256 discrepancy = _convertToAssets(shares) - assets;
         if (discrepancy > 0) require(discrepancy <= yield() - assets, "INSUFFICIENT_YIELD_TO_COVER_DISCREPANCY");
 
+        // Calculate the amount to reserve and the amount to deposit into the yield vault.
+        uint256 assetsToReserve = (assets * $.minimumReservePercentage) / 100;
+        uint256 assetsToDeposit = assets - assetsToReserve;
+
+        // Deposit into the yield vault.
+        uint256 maxDeposit_ = $.yieldVault.maxDeposit(address(this));
+        assetsToDeposit = assetsToDeposit > maxDeposit_ ? maxDeposit_ : assetsToDeposit;
+        if (assetsToDeposit > 0) {
+            $.yieldVault.deposit(assetsToDeposit, address(this));
+        }
+
         // Mint yeToken to self and bridge it to address zero on the destination network.
         _mint(address(this), shares);
         lxlyBridge().bridgeAsset(destinationNetworkId, address(0), shares, address(this), true, "");
