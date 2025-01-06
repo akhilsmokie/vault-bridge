@@ -59,13 +59,9 @@ abstract contract YieldExposedToken is
     event ReserveRebalanced(uint256 newReserve);
     event YieldCollected(address indexed yieldRecipient, uint256 underlyingTokenAmount);
 
-    constructor() {
-        _disableInitializers();
-    }
-
-    /// @dev Do not forget to call `super.initialize` if overriding.
+    /// @dev Do not forget to `_disableInitializers` in the constructor of the yeToken.
     /// @dev `decimals` will match the underlying token.
-    function initialize(
+    function __YieldExposedToken_init(
         address owner_,
         string calldata name_,
         string calldata symbol_,
@@ -75,7 +71,7 @@ abstract contract YieldExposedToken is
         address yieldRecipient_,
         address lxlyBridge_,
         address migrationManager_
-    ) public virtual initializer {
+    ) internal onlyInitializing {
         // Check the inputs.
         require(owner_ != address(0), "INVALID_OWNER");
         require(bytes(name_).length > 0, "INVALID_NAME");
@@ -712,3 +708,4 @@ abstract contract YieldExposedToken is
 // @todo Add more basic input checks, such as that the amount is not zero.
 // @todo Reentrancy review.
 // @todo Review with Morpho: pre function calls (e.g., before `withdraw`), the possibility unfavorable rates, etc.
+// @todo Check Morpho skim and fee recipients.
