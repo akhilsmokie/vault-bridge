@@ -5,6 +5,35 @@ import {YieldExposedToken} from "../YieldExposedToken.sol";
 
 /// @title Yield Exposed USDC
 contract yeUSDC is YieldExposedToken {
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(
+        address owner_,
+        string calldata name_,
+        string calldata symbol_,
+        address underlyingToken_,
+        uint8 minimumReservePercentage_,
+        address yieldVault_,
+        address yieldRecipient_,
+        address lxlyBridge_,
+        address migrationManager_
+    ) external initializer {
+        // Initialize the base implementation.
+        __YieldExposedToken_init(
+            owner_,
+            name_,
+            symbol_,
+            underlyingToken_,
+            minimumReservePercentage_,
+            yieldVault_,
+            yieldRecipient_,
+            lxlyBridge_,
+            migrationManager_
+        );
+    }
+
     /// @dev USDC does not have a transfer fee.
     function _assetsAfterTransferFee(uint256 assetsBeforeTransferFee)
         internal
