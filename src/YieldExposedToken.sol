@@ -228,7 +228,7 @@ abstract contract YieldExposedToken is
         address destinationAddress,
         bool forceUpdateGlobalExitRoot,
         uint256 maxShares
-    ) internal returns (uint256 shares, uint256 spentAssets) {
+    ) internal virtual returns (uint256 shares, uint256 spentAssets) {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
 
         // Check the input.
