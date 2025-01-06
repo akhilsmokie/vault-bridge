@@ -5,13 +5,27 @@ import {YieldExposedToken} from "../YieldExposedToken.sol";
 
 /// @title Yield Exposed USDT
 contract yeUSDT is YieldExposedToken {
-    /// @notice The cached basis points rate.
-    /// @dev USDT emits an event when the transfer fee changes. Make sure to recache the parameters when that happens.
-    uint256 internal _cachedBasisPointsRate;
+    /**
+     * @dev Storage of the Yield Exposed USDT contract.
+     * @dev It's implemented on a custom ERC-7201 namespace to reduce the risk of storage collisions when using with upgradeable contracts.
+     * @custom:storage-location erc7201:0xpolygon.storage.NativeConverter
+     */
+    struct YeUSDTStorage {
+        /// @notice The cached basis points rate.
+        /// @dev USDT emits an event when the transfer fee changes. Make sure to recache the parameters when that happens.
+        uint256 cachedBasisPointsRate;
+        /// @notice The cached maximum fee.
+        /// @dev USDT emits an event when the transfer fee changes. Make sure to recache the parameters when that happens.
+        uint256 cachedMaximumFee;
+    }
 
-    /// @notice The cached maximum fee.
-    /// @dev USDT emits an event when the transfer fee changes. Make sure to recache the parameters when that happens.
-    uint256 internal _cachedMaximumFee;
+    /// @dev The storage slot at which Yield Exposed USDT storage starts, following the EIP-7201 standard.
+    /// @dev Calculated as `keccak256(abi.encode(uint256(keccak256("0xpolygon.storage.yeusdt")) - 1)) & ~bytes32(uint256(0xff))`.
+    bytes32 private constant _YEUSDT_STORAGE = 0x84ee203f1e1f9edfbb1e849a4d092d07ed40cbb089b8d6192bf4930bf3c7a600;
+
+    constructor() {
+        _disableInitializers();
+    }
 
     function initialize(
         address owner_,
@@ -23,9 +37,9 @@ contract yeUSDT is YieldExposedToken {
         address yieldRecipient_,
         address lxlyBridge_,
         address migrationManager_
-    ) public override {
+    ) external initializer {
         // Initialize the base implementation.
-        super.initialize(
+        __YieldExposedToken_init(
             owner_,
             name_,
             symbol_,
@@ -38,13 +52,15 @@ contract yeUSDT is YieldExposedToken {
         );
 
         // Cache the USDT transfer fee parameters.
-        cacheUSDTTransferFeeParameters();
+        recacheUSDTTransferFeeParameters();
     }
 
-    /// @notice Cache the USDT transfer fee parameters.
-    function cacheUSDTTransferFeeParameters() public {
-        _cachedBasisPointsRate = IUSDT(asset())._cachedBasisPointsRate();
-        _cachedMaximumFee = IUSDT(asset())._cachedMaximumFee();
+    /// @notice Recache the USDT transfer fee parameters.
+    function recacheUSDTTransferFeeParameters() public {
+        YeUSDTStorage storage $ = _getYeUSDTStorage();
+
+        $.cachedBasisPointsRate = IUSDT(asset()).basisPointsRate();
+        $.cachedMaximumFee = IUSDT(asset()).maximumFee();
     }
 
     /// @dev USDT has a transfer fee.
@@ -55,13 +71,15 @@ contract yeUSDT is YieldExposedToken {
         override
         returns (uint256)
     {
-        if (_cachedBasisPointsRate == 0) {
+        YeUSDTStorage storage $ = _getYeUSDTStorage();
+
+        if ($.cachedBasisPointsRate == 0) {
             return assetsBeforeTransferFee;
         }
 
-        uint256 fee = (assetsBeforeTransferFee * _cachedBasisPointsRate) / 10000;
-        if (fee > _cachedMaximumFee) {
-            fee = _cachedMaximumFee;
+        uint256 fee = (assetsBeforeTransferFee * $.cachedBasisPointsRate) / 10000;
+        if (fee > $.cachedMaximumFee) {
+            fee = $.cachedMaximumFee;
         }
 
         return assetsBeforeTransferFee - fee;
@@ -75,22 +93,24 @@ contract yeUSDT is YieldExposedToken {
         override
         returns (uint256)
     {
-        if (_cachedBasisPointsRate == 0) {
+        YeUSDTStorage storage $ = _getYeUSDTStorage();
+
+        if ($.cachedBasisPointsRate == 0) {
             return minimumAssetsAfterTransferFee;
         }
 
-        uint256 denom = 10000 - _cachedBasisPointsRate;
+        uint256 denom = 10000 - $.cachedBasisPointsRate;
         uint256 candidate = (minimumAssetsAfterTransferFee * 10000 + (denom - 1)) / denom;
 
-        uint256 feeCandidate = (candidate * _cachedBasisPointsRate) / 10000;
-        if (feeCandidate > _cachedMaximumFee) {
-            return minimumAssetsAfterTransferFee + _cachedMaximumFee;
+        uint256 feeCandidate = (candidate * $.cachedBasisPointsRate) / 10000;
+        if (feeCandidate > $.cachedMaximumFee) {
+            return minimumAssetsAfterTransferFee + $.cachedMaximumFee;
         }
 
         while (candidate > 0) {
-            uint256 feeCandidateMinus1 = ((candidate - 1) * _cachedBasisPointsRate) / 10000;
-            if (feeCandidateMinus1 > _cachedMaximumFee) {
-                feeCandidateMinus1 = _cachedMaximumFee;
+            uint256 feeCandidateMinus1 = ((candidate - 1) * $.cachedBasisPointsRate) / 10000;
+            if (feeCandidateMinus1 > $.cachedMaximumFee) {
+                feeCandidateMinus1 = $.cachedMaximumFee;
             }
 
             uint256 afterFeeMinus1 = (candidate - 1) - feeCandidateMinus1;
@@ -103,12 +123,21 @@ contract yeUSDT is YieldExposedToken {
 
         return candidate;
     }
+
+    /**
+     * @dev Returns a pointer to the ERC-7201 storage namespace.
+     */
+    function _getYeUSDTStorage() private pure returns (YeUSDTStorage storage $) {
+        assembly {
+            $.slot := _YEUSDT_STORAGE
+        }
+    }
 }
 
-/// @notice Interface of USDT.
+/// @notice The interface of USDT.
 interface IUSDT {
-    function _cachedBasisPointsRate() external view returns (uint256);
-    function _cachedMaximumFee() external view returns (uint256);
+    function basisPointsRate() external view returns (uint256);
+    function maximumFee() external view returns (uint256);
 }
 
 // @todo Revisit and document.
