@@ -102,7 +102,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
 
     /// @notice Burns the custom token and bridges the wrapped underlying token to the destination address on the L1.
     /// @notice Transfer fees of the custom token may apply.
-    function deconvertAndBridgeBack(uint256 amount, address destinationAddress, bool forceUpdateGlobalExitRoot)
+    function deconvertAndBridgeToL1(uint256 amount, address destinationAddress, bool forceUpdateGlobalExitRoot)
         external
         whenNotPaused
     {
@@ -141,6 +141,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         $.unmigratedBacking -= amount;
     }
 
+    // @todo Consider capping the amount so that Native Converter stays liquid.
     /// @notice Migrates the backing of the custom token to the L1.
     /// @notice This function can be called by anyone.
     function migrateBacking() external whenNotPaused {
