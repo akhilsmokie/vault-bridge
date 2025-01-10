@@ -106,7 +106,7 @@ abstract contract YieldExposedToken is
 
         // @note Check security implications.
         // Approve the yield vault and LxLy Bridge.
-        IERC20(underlyingToken_).approve(yieldVault_, type(uint256).max);
+        IERC20(underlyingToken_).forceApprove(yieldVault_, type(uint256).max);
         _approve(address(this), address(lxlyBridge_), type(uint256).max);
     }
 
