@@ -191,14 +191,14 @@ abstract contract YieldExposedToken is
     /// @notice Tells how much a specific amount of underlying token is worth in yeToken.
     function convertToShares(uint256 assets) public pure override returns (uint256 shares) {
         // The underlying token backs yeToken 1:1.
-        // Caution! Changing this function will affect the exchange rate.
+        // Caution! Changing this function will affect the conversion rate for the entire contract.
         shares = assets;
     }
 
     /// @notice Tells how much a specific amount of yeToken is worth in the underlying token.
     function convertToAssets(uint256 shares) public pure override returns (uint256 assets) {
         // yeToken is backed by the underlying token 1:1.
-        // Caution! Changing this function will affect the exchange rate.
+        // Caution! Changing this function will affect the conversion rate for the entire contract.
         assets = shares;
     }
 
@@ -531,7 +531,7 @@ abstract contract YieldExposedToken is
 
     /// @dev Pausable ERC-20 `transfer` function.
     function transfer(address to, uint256 value) public virtual override(ERC20Upgradeable, IERC20) returns (bool) {
-        return super.transfer(to, value);
+        return ERC20Upgradeable.transfer(to, value);
     }
 
     /// @dev Pausable ERC-20 `transferFrom` function.
@@ -542,7 +542,7 @@ abstract contract YieldExposedToken is
         whenNotPaused
         returns (bool)
     {
-        return super.transferFrom(from, to, value);
+        return ERC20Upgradeable.transferFrom(from, to, value);
     }
 
     /// @dev Pausable ERC-20 `approve` function.
@@ -553,7 +553,7 @@ abstract contract YieldExposedToken is
         whenNotPaused
         returns (bool)
     {
-        return super.approve(spender, value);
+        return ERC20Upgradeable.approve(spender, value);
     }
 
     /// @dev Pausable ERC-20 Permit `permit` function.
@@ -793,7 +793,7 @@ abstract contract YieldExposedToken is
         _pause();
     }
 
-    /// @notice Allowes usage of functions with the `whenNotPaused` modifier.
+    /// @notice Allows usage of functions with the `whenNotPaused` modifier.
     /// @notice This function can be called by the owner only.
     function unpause() external onlyOwner {
         _unpause();
