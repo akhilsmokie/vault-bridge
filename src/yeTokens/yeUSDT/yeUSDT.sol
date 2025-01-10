@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity 0.8.28;
 
-import {YieldExposedToken} from "../YieldExposedToken.sol";
+import {YieldExposedToken} from "../../YieldExposedToken.sol";
+import {USDTTransferFeeCalculator} from "./USDTTransferFeeCalculator.sol";
 
-/// @title Yield Exposed DAI
-contract yeDAI is YieldExposedToken {
+/// @title Yield Exposed USDT
+contract yeUSDT is YieldExposedToken, USDTTransferFeeCalculator {
     constructor() {
         _disableInitializers();
     }
@@ -32,27 +33,30 @@ contract yeDAI is YieldExposedToken {
             lxlyBridge_,
             migrationManager_
         );
+
+        // Initialize the inherited module.
+        __USDTTransferFeeCalculator_init(underlyingToken_);
     }
 
-    /// @dev DAI does not have a transfer fee.
+    // -----================= ::: DEV ::: =================-----
+
     function _assetsAfterTransferFee(uint256 assetsBeforeTransferFee)
         internal
         view
         virtual
-        override
+        override(YieldExposedToken, USDTTransferFeeCalculator)
         returns (uint256)
     {
-        return assetsBeforeTransferFee;
+        return USDTTransferFeeCalculator._assetsAfterTransferFee(assetsBeforeTransferFee);
     }
 
-    /// @dev DAI does not have a transfer fee.
     function _assetsBeforeTransferFee(uint256 minimumAssetsAfterTransferFee)
         internal
         view
         virtual
-        override
+        override(YieldExposedToken, USDTTransferFeeCalculator)
         returns (uint256)
     {
-        return minimumAssetsAfterTransferFee;
+        return USDTTransferFeeCalculator._assetsBeforeTransferFee(minimumAssetsAfterTransferFee);
     }
 }
