@@ -41,7 +41,7 @@ abstract contract YieldExposedToken is
     struct YieldExposedTokenStorage {
         IERC20 underlyingToken;
         uint8 decimals;
-        // @note Is using 1 for 1% a good idea because of rounding?
+        // @note Using 1 for 1%.
         uint8 minimumReservePercentage;
         IERC4626 yieldVault;
         address yieldRecipient;
@@ -92,9 +92,9 @@ abstract contract YieldExposedToken is
         __Ownable_init(owner_);
         __Pausable_init();
 
+        // Initialize the storage.
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
 
-        // Initialize the storage.
         $.underlyingToken = IERC20(underlyingToken_);
         $.decimals = IERC20Metadata(underlyingToken_).decimals();
         $.minimumReservePercentage = minimumReservePercentage_;
@@ -298,12 +298,12 @@ abstract contract YieldExposedToken is
         spentAssets = assets;
 
         // Calculate the amount to reserve and the amount to deposit into the yield vault.
-        // @note Is the math safe from rounding?
+        // @note Check rounding.
         uint256 assetsToReserve = (assets * $.minimumReservePercentage) / 100;
         uint256 assetsToDeposit = assets - assetsToReserve;
 
         // Deposit into the yield vault.
-        // @note How to make sure we're getting a fair amount of shares?
+        // @note Yield vault usage.
         uint256 maxDeposit_ = $.yieldVault.maxDeposit(address(this));
         assetsToDeposit = assetsToDeposit > maxDeposit_ ? maxDeposit_ : assetsToDeposit;
         if (assetsToDeposit > 0) {
@@ -481,7 +481,7 @@ abstract contract YieldExposedToken is
         remainingAssets -= amountToWithdraw;
 
         // Calculate the amount to withdraw from the yield vault.
-        // @note How to make sure the yield vault burns a fair amount of shares?
+        // @note Yield vault usage.
         uint256 maxWithdraw_ = $.yieldVault.maxWithdraw(address(this));
 
         // Withdraw from the yield vault.
@@ -582,7 +582,7 @@ abstract contract YieldExposedToken is
     /// @notice The current reserve percentage.
     /// @notice The reserve is based on the total supply of yeToken, and may not account for uncompleted migrations of backing from Layer Ys to Layer X. Please refer to `completeMigration` for more information.
     function reservePercentage() external view returns (uint256) {
-        // @note The math is not safe from rounding.
+        // @note Check rounding.
         return (reservedAssets() * 100) / totalAssets();
     }
 
@@ -613,14 +613,14 @@ abstract contract YieldExposedToken is
 
         // Caclulate the minimum reserve amount.
         uint256 reservedAssets_ = reservedAssets();
-        // @note Is the math safe from rounding?
+        // @note Check rounding.
         uint256 minimumReserve = convertToAssets((totalSupply() * $.minimumReservePercentage) / 100);
 
         // Check if the reserve is below, above, or at the minimum threshold.
         if (reservedAssets_ < minimumReserve) {
             // Calculate how much to withdraw.
             uint256 shortfall = minimumReserve - reservedAssets_;
-            // @note How to make sure the yield vault burns a fair amount of shares?
+            // @note Yield vault usage.
             uint256 maxWithdraw_ = $.yieldVault.maxWithdraw(address(this));
             uint256 assetsToWithdraw = shortfall > maxWithdraw_ ? maxWithdraw_ : shortfall;
 
@@ -635,7 +635,7 @@ abstract contract YieldExposedToken is
         } else if (reservedAssets_ > minimumReserve && allowRebalanceDown) {
             // Calculate how much to deposit.
             uint256 excess = reservedAssets_ - minimumReserve;
-            // @note How to make sure we're getting a fair amount of shares?
+            // @note Yield vault usage.
             uint256 maxDeposit_ = $.yieldVault.maxDeposit(address(this));
             uint256 assetsToDeposit = excess > maxDeposit_ ? maxDeposit_ : excess;
 
@@ -721,12 +721,12 @@ abstract contract YieldExposedToken is
         }
 
         // Calculate the amount to reserve and the amount to deposit into the yield vault.
-        // @note Is the math safe from rounding?
+        // @note Check rounding.
         uint256 assetsToReserve = (assets * $.minimumReservePercentage) / 100;
         uint256 assetsToDeposit = assets - assetsToReserve;
 
         // Deposit into the yield vault.
-        // @note How to make sure we're getting a fair amount of shares?
+        // @note Yield vault usage.
         uint256 maxDeposit_ = $.yieldVault.maxDeposit(address(this));
         assetsToDeposit = assetsToDeposit > maxDeposit_ ? maxDeposit_ : assetsToDeposit;
         if (assetsToDeposit > 0) {
@@ -828,7 +828,7 @@ abstract contract YieldExposedToken is
     function _assetsBeforeTransferFee(uint256 minimumAssetsAfterTransferFee) internal view virtual returns (uint256);
 }
 
-// @todo See the @note-s.
 // @todo Reentrancy review.
 // @todo Review with Morpho: pre function calls (e.g., before `withdraw`), the possibility unfavorable rates, etc.
 // @todo Check Morpho skim and fee recipients.
+// @todo @notes.
