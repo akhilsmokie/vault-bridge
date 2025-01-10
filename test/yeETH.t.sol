@@ -3,7 +3,6 @@ pragma solidity 0.8.28;
 
 import {Test, console2} from "forge-std/Test.sol";
 import {YeETH} from "../src/yeTokens/yeETH.sol";
-import {YieldExposedToken} from "../src/YieldExposedToken.sol";
 import {ERC1967Proxy} from "@openzeppelin-contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IMetaMorphoV1_1Factory} from "../src/etc/IMetaMorphoV1_1Factory.sol";
 
@@ -36,7 +35,7 @@ contract yeETHTest is Test {
         
         // prepare calldata
         bytes memory initData = abi.encodeCall(
-            YieldExposedToken.initialize,
+            yeETH.initialize,
             (
                 address(this), // owner
                 "Yield Exposed ETH", // name

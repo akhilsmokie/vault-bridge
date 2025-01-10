@@ -107,6 +107,11 @@ abstract contract YieldExposedToken is
         _approve(address(this), address(lxlyBridge_), type(uint256).max);
     }
 
+    function underlyingToken() public view returns (IERC20) {
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+        return $.underlyingToken;
+    }
+
     /// @notice The number of decimals of the yield exposed token.
     /// @notice The number of decimals is the same as that of the underlying token.
     function decimals() public view virtual override(ERC20Upgradeable, IERC20Metadata) returns (uint8) {
@@ -136,6 +141,12 @@ abstract contract YieldExposedToken is
     function lxlyBridge() public view returns (ILxLyBridge) {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
         return $.lxlyBridge;
+    }
+
+    /// @notice The network ID of the LxLy Bridge.
+    function lxlyId() public view returns (uint32) {
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+        return $.lxlyId;
     }
 
     /// @notice The address of Migration Manager for this yeToken.
@@ -228,30 +239,28 @@ abstract contract YieldExposedToken is
         address destinationAddress,
         bool forceUpdateGlobalExitRoot,
         uint256 maxShares
-    ) internal virtual returns (uint256 shares, uint256 spentAssets) {
+    ) internal returns (uint256 shares, uint256 spentAssets) {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
 
         // Check the input.
         require(assets > 0, "INVALID_AMOUNT");
 
-        // Transfer the underlying token from the sender to itself.
-        uint256 previousBalance = $.underlyingToken.balanceOf(address(this));
-        $.underlyingToken.safeTransferFrom(msg.sender, address(this), assets);
-        assets = $.underlyingToken.balanceOf(address(this)) - previousBalance;
 
         // Check for a refund.
         if (maxShares > 0) {
             uint256 requiredAssets = _convertToAssets(maxShares);
             if (assets > requiredAssets) {
                 uint256 refund = assets - requiredAssets;
-                $.underlyingToken.safeTransfer(msg.sender, refund);
+                _refund(refund);
                 assets = requiredAssets;
             }
         }
 
+        // Transfer the required amount from the sender to this contract.
+        spentAssets =_receiveToken(assets);
+
         // Set the return values.
         shares = _convertToShares(assets);
-        spentAssets = assets;
 
         // Calculate the amount to reserve and the amount to deposit into the yield vault.
         uint256 assetsToReserve = (assets * $.minimumReservePercentage) / 100;
@@ -279,6 +288,22 @@ abstract contract YieldExposedToken is
         // Emit the ERC-4626 event.
         if (destinationNetworkId != $.lxlyId) destinationAddress = address(this);
         emit IERC4626.Deposit(msg.sender, destinationAddress, assets, shares);
+    }
+
+    /// @notice Transfer the underlying token from the sender to itself.
+    function _receiveToken(uint256 assets) internal virtual returns (uint256) {
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+
+        // Transfer the underlying token from the sender to itself.
+        uint256 previousBalance = $.underlyingToken.balanceOf(address(this));
+        $.underlyingToken.safeTransferFrom(msg.sender, address(this), assets);
+        return $.underlyingToken.balanceOf(address(this)) - previousBalance;
+    }
+
+    /// @notice Refund the underlying token back to the sender.
+    function _refund(uint256 refund) internal virtual {
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+        $.underlyingToken.safeTransfer(msg.sender, refund);
     }
 
     /// @notice Locks the underlying token, mints yeToken, and optionally bridges it to an L2.

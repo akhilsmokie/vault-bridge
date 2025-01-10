@@ -9,12 +9,38 @@ import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 /// @title Yield Exposed gas token
 contract YeETH is YieldExposedToken {
 
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(
+        address owner_,
+        string calldata name_,
+        string calldata symbol_,
+        address underlyingToken_,
+        uint8 minimumReservePercentage_,
+        address yieldVault_,
+        address yieldRecipient_,
+        address lxlyBridge_,
+        address migrationManager_
+    ) external initializer {
+        // Initialize the base implementation.
+        __YieldExposedToken_init(
+            owner_,
+            name_,
+            symbol_,
+            underlyingToken_,
+            minimumReservePercentage_,
+            yieldVault_,
+            yieldRecipient_,
+            lxlyBridge_,
+            migrationManager_
+        );
+    }
+
     /// @dev deposit ETH to get yeETH
     function depositGasToken(address receiver) external payable whenNotPaused returns (uint256 shares) {
-        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
-        uint256 assets = msg.value;
-
-        (shares,) = _deposit(assets, $.lxlyId, receiver, false, 0);
+        (shares,) = _deposit(msg.value, lxlyId(), receiver, false, 0);
     }
 
     /// @dev deposit ETH to get yeETH and bridge to an L2
@@ -23,71 +49,19 @@ contract YeETH is YieldExposedToken {
         uint32 destinationNetworkId,
         bool forceUpdateGlobalExitRoot
     ) external payable whenNotPaused returns (uint256 shares) {
-        uint256 assets = msg.value;
-
-        (shares,) = _deposit(assets, destinationNetworkId, destinationAddress, forceUpdateGlobalExitRoot, 0);
+        (shares,) = _deposit(msg.value, destinationNetworkId, destinationAddress, forceUpdateGlobalExitRoot, 0);
     }
 
-    /// @notice OVERRIDES _deposit from YieldExposedToken to handle ETH deposits
-    /// @notice Locks the underlying token, mints yeToken, and optionally bridges it to an L2.
-    /// @param maxShares Caps the amount of yeToken that can be minted. The difference is refunded to the sender. Set to `0` to disable.
-    function _deposit(
-        uint256 assets,
-        uint32 destinationNetworkId,
-        address destinationAddress,
-        bool forceUpdateGlobalExitRoot,
-        uint256 maxShares
-    ) internal override returns (uint256 shares, uint256 spentAssets) {
-        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+    function _refund(uint256 refund) internal override {
+        (bool success,) = payable(msg.sender).call{value: refund}("");
+        assert(success);
+    }
 
-        // Check the input.
-        require(assets > 0, "INVALID_AMOUNT");
-
-        // Check for a refund.
-        if (maxShares > 0) {
-            uint256 requiredAssets = _convertToAssets(maxShares);
-            if (assets > requiredAssets) {
-                uint256 refund = assets - requiredAssets;
-                (bool success,) = payable(msg.sender).call{value: refund}("");
-                assert(success);
-                assets = requiredAssets;
-            }
-        }
-
+    function _receiveToken(uint256 assets) internal override returns (uint256) {
         // convert ETH to WETH
-        IWETH9 weth = IWETH9(address($.underlyingToken));
+        IWETH9 weth = IWETH9(address(underlyingToken()));
         weth.deposit{value: assets}();
-
-        // Set the return values.
-        shares = _convertToShares(assets);
-        spentAssets = assets;
-
-        // Calculate the amount to reserve and the amount to deposit into the yield vault.
-        uint256 assetsToReserve = (assets * $.minimumReservePercentage) / 100;
-        uint256 assetsToDeposit = assets - assetsToReserve;
-
-        // Deposit into the yield vault.
-        uint256 maxDeposit_ = $.yieldVault.maxDeposit(address(this));
-        assetsToDeposit = assetsToDeposit > maxDeposit_ ? maxDeposit_ : assetsToDeposit;
-        if (assetsToDeposit > 0) {
-            $.yieldVault.deposit(assetsToDeposit, address(this));
-        }
-
-        // Mint yeToken.
-        if (destinationNetworkId != $.lxlyId) {
-            // Mint to self and bridge to the receiver.
-            _mint(address(this), shares);
-            lxlyBridge().bridgeAsset(
-                destinationNetworkId, destinationAddress, shares, address(this), forceUpdateGlobalExitRoot, ""
-            );
-        } else {
-            // Mint to the receiver.
-            _mint(destinationAddress, shares);
-        }
-
-        // Emit the ERC-4626 event.
-        if (destinationNetworkId != $.lxlyId) destinationAddress = address(this);
-        emit IERC4626.Deposit(msg.sender, destinationAddress, assets, shares);
+        return assets;
     }
 
     /// @dev yeETH does not have a transfer fee.
