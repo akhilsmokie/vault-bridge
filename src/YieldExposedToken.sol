@@ -31,6 +31,7 @@ abstract contract YieldExposedToken is
     ERC20PermitUpgradeable,
     IVersioned
 {
+    // Libraries.
     using SafeERC20 for IERC20;
 
     /**
@@ -55,6 +56,7 @@ abstract contract YieldExposedToken is
     bytes32 private constant _YIELD_EXPOSED_TOKEN_STORAGE =
         0xed23de664e59f2cbf6ba852da776346da171cf53c9d06b116fea0fc5ee912500;
 
+    // Events.
     event ReserveRebalanced(uint256 reservedAssets);
     event YieldCollected(address indexed yieldRecipient, uint256 underlyingTokenAmount);
     event MigrationCompleted(uint32 destinationNetworkId, uint256 shares, uint256 utilizedYield);
