@@ -34,6 +34,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
     struct NativeConverterStorage {
         IERC20Plus customToken;
         IERC20 wrappedUnderlyingToken;
+        uint256 mintedCustomTokenOnLayerY;
         uint256 backingOnLayerY;
         uint256 dailyMigrationLimit;
         uint256 dailyMigratedAmount;
@@ -64,7 +65,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         address lxlyBridge_,
         uint32 layerXNetworkId_,
         address migrationManager_
-    ) external onlyInitializing {
+    ) internal onlyInitializing {
         // Check the inputs.
         require(owner_ != address(0), "INVALID_OWNER");
         require(customToken_ != address(0), "INVALID_CUSTOM_TOKEN");
@@ -100,10 +101,16 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         return $.customToken;
     }
 
-    /// @notice The original wrapped token created by LxLy Bridge represent the underlying token on Layer Y.
+    /// @notice The original wrapped token created by LxLy Bridge to represent the underlying token on Layer Y.
     function wrappedUnderlyingToken() public view returns (IERC20) {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
         return $.wrappedUnderlyingToken;
+    }
+
+    /// @notice The amount of the custom token minted by Native Converter on Layer Y for which the backing has not been migrated to Layer X.
+    function mintedCustomTokenOnLayerY() public view returns (uint256) {
+        NativeConverterStorage storage $ = _getNativeConverterStorage();
+        return $.mintedCustomTokenOnLayerY;
     }
 
     /// @notice The amount of the wrapped underlying token that backs the custom token minted by Native Converter that has not been migrated to Layer X.
@@ -117,6 +124,18 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
     function dailyMigrationLimit() public view returns (uint256) {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
         return $.dailyMigrationLimit;
+    }
+
+    /// @notice The amount of backing migrated to Layer X in the current day.
+    function dailyMigratedAmount() public view returns (uint256) {
+        NativeConverterStorage storage $ = _getNativeConverterStorage();
+        return $.dailyMigratedAmount;
+    }
+
+    /// @notice The beginning of the current day.
+    function midnightTimestamp() public view returns (uint256) {
+        NativeConverterStorage storage $ = _getNativeConverterStorage();
+        return $.midnightTimestamp;
     }
 
     /// @notice LxLy Bridge, which connects AggLayer networks.
@@ -148,7 +167,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
 
     // -----================= ::: NATIVE CONVERTER ::: =================-----
 
-    /// @notice Locks the wrapped underlying token and mints the custom token.
+    /// @notice Locks the wrapped underlying token and mints the equivalent amount of the custom token.
     function convert(uint256 amount) external whenNotPaused {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
 
@@ -156,20 +175,23 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         // Bridge-wrapped tokens do not have a transfer fee.
         $.wrappedUnderlyingToken.safeTransferFrom(msg.sender, address(this), amount);
 
-        // @note Handle different decimals.
-        // Mint the custom token to the caller.
-        $.customToken.mint(msg.sender, amount);
+        // Calculate the amount of the custom token to mint.
+        uint256 amountInCustomToken = _convertToShares(amount);
 
-        // Update the amount backing for migration.
+        // Mint the custom token to the caller.
+        $.customToken.mint(msg.sender, amountInCustomToken);
+
+        // Update the custom token and backing data.
+        $.mintedCustomTokenOnLayerY += amountInCustomToken;
         $.backingOnLayerY += amount;
     }
 
-    /// @notice Burns the custom token and unlocks the wrapped underlying token.
+    /// @notice Burns the custom token and unlocks the equivalent amount of the wrapped underlying token.
     function deconvert(uint256 amount) external whenNotPaused {
         _deconvert(amount, address(0), false);
     }
 
-    /// @notice Burns the custom token and bridges the wrapped underlying token to the destination address on Layer X.
+    /// @notice Burns the custom token and bridges the equivalent amount of the wrapped underlying token to the destination address on Layer X.
     function deconvertAndBridgeToLayerX(uint256 amount, address destinationAddress, bool forceUpdateGlobalExitRoot)
         external
         whenNotPaused
@@ -177,34 +199,35 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         _deconvert(amount, destinationAddress, forceUpdateGlobalExitRoot);
     }
 
-    /// @notice Burns the custom token and unlocks the wrapped underlying token or bridges it to the destination address on Layer X.
+    /// @notice Burns the custom token and unlocks the equivalent amount of the wrapped underlying token or bridges it to the destination address on Layer X.
     function _deconvert(uint256 amount, address destinationAddress, bool forceUpdateGlobalExitRoot) internal {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
 
         // Burn the custom token from the caller.
         $.customToken.burn(msg.sender, amount);
 
+        // Calculate the amount of the wrapped underlying token to unlock.
+        uint256 amountInWrappedUnderlyingToken = _convertToAssets(amount);
+
         // If no address is specified, deconvert without bridging.
         if (destinationAddress == address(0)) {
-            // @note Handle different decimals.
             // Transfer the wrapped underlying token to the caller.
-            $.wrappedUnderlyingToken.safeTransfer(msg.sender, amount);
+            $.wrappedUnderlyingToken.safeTransfer(msg.sender, amountInWrappedUnderlyingToken);
         } else {
-            // @note Handle different decimals.
             // Bridge the wrapped underlying token to the destination address on Layer X.
             $.lxlyBridge.bridgeAsset(
                 $.layerXNetworkId,
                 destinationAddress,
-                amount,
+                amountInWrappedUnderlyingToken,
                 address($.wrappedUnderlyingToken),
                 forceUpdateGlobalExitRoot,
                 ""
             );
         }
 
-        // @note Handle different decimals.
-        // Update the amount of backing for migration.
-        $.backingOnLayerY -= amount;
+        // Update the custom token and backing data.
+        $.mintedCustomTokenOnLayerY -= amount;
+        $.backingOnLayerY -= amountInWrappedUnderlyingToken;
     }
 
     /// @notice Migrates a limited amount of backing to Layer X.
@@ -247,7 +270,11 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
     function _migrateBackingToLayerX(uint256 amount) internal {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
 
-        // Update the amount of backing for migration.
+        // Calculate the amount of the custom token to subtract.
+        uint256 amountInCustomToken = _convertToShares(amount);
+
+        // Update the custom token and backing data.
+        $.mintedCustomTokenOnLayerY -= amountInCustomToken;
         $.backingOnLayerY -= amount;
 
         // Bridge the backing to Migration Manager on Layer X.
@@ -257,7 +284,10 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
 
         // Bridge a message to Migration Manager on Layer X to complete the migration.
         $.lxlyBridge.bridgeMessage(
-            $.layerXNetworkId, $.migrationManager, true, abi.encode(CrossNetworkInstruction.COMPLETE_MIGRATION, amount)
+            $.layerXNetworkId,
+            $.migrationManager,
+            true,
+            abi.encode(CrossNetworkInstruction.COMPLETE_MIGRATION, amount, amountInCustomToken)
         );
 
         // Emit the event.
@@ -276,6 +306,24 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         emit DailyMigrationLimitSet(dailyMigrationLimit_);
     }
 
+    // -----================= ::: PSEUDO ERC-4626 ::: =================-----
+
+    /// @notice Tells how much a specific amount of underlying token is worth in yeToken.
+    function _convertToShares(uint256 assets) internal pure returns (uint256 shares) {
+        // The underlying token backs yeToken 1:1.
+        // Caution! Changing this function will affect the conversion rate for the entire contract.
+        // @note Handle different decimals.
+        shares = assets;
+    }
+
+    /// @notice Tells how much a specific amount of yeToken is worth in the underlying token.
+    function _convertToAssets(uint256 shares) internal pure returns (uint256 assets) {
+        // yeToken is backed by the underlying token 1:1.
+        // Caution! Changing this function will affect the conversion rate for the entire contract.
+        // @note Handle different decimals.
+        assets = shares;
+    }
+
     // -----================= ::: ADMIN ::: =================-----
 
     /// @notice Prevents usage of functions with the `whenNotPaused` modifier.
@@ -284,7 +332,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         _pause();
     }
 
-    /// @notice Allowes usage of functions with the `whenNotPaused` modifier.
+    /// @notice Allows usage of functions with the `whenNotPaused` modifier.
     /// @notice This function can be called by the owner only.
     function unpause() external onlyOwner {
         _unpause();
