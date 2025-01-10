@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity 0.8.28;
 
-// @todo Copied from 0xPolygon/usdx-lxly-stb - to be inspected.
+// @todo TO BE INSPECTED (copied from 0xPolygon/usdx-lxly-stb).
 
 /// @title LibPermit
 /// @notice Library to call the EIP-2612 permit method on a token
