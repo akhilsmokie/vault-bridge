@@ -470,8 +470,10 @@ abstract contract YieldExposedToken is
         uint256 amountToWithdraw = reservedAssets_ >= remainingAssets ? remainingAssets : reservedAssets_;
 
         // Withdraw from the reserve.
-        _burn(owner, convertToShares(amountToWithdraw));
-        $.underlyingToken.safeTransfer(receiver, amountToWithdraw);
+        if (amountToWithdraw > 0) {
+            _burn(owner, convertToShares(amountToWithdraw));
+            $.underlyingToken.safeTransfer(receiver, amountToWithdraw);
+        }
 
         // Check if the amount in the reserve was sufficient.
         if (amountToWithdraw == remainingAssets) {
@@ -488,7 +490,7 @@ abstract contract YieldExposedToken is
 
         // Withdraw from the yield vault.
         if (maxWithdraw_ >= remainingAssets) {
-            _burn(owner, shares);
+            _burn(owner, convertToShares(remainingAssets));
             $.yieldVault.withdraw(remainingAssets, receiver, address(this));
             emit IERC4626.Withdraw(msg.sender, receiver, owner, assets, shares);
             return shares;
