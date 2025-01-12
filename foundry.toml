@@ -24,9 +24,6 @@ forge-std = { version = "1.9.4" }
 "@openzeppelin-contracts" = { version = "5.1.0" }
 "@openzeppelin-contracts-upgradeable" = { version = "5.1.0" }
 
-[rpc_endpoints]
-mainnet = "https://mainnet.infura.io/v3/${INFURA_TOKEN}"
-
 [soldeer]
 remappings_generate = true
 remappings_version = false

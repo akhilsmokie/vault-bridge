@@ -244,26 +244,6 @@ abstract contract YieldExposedToken is
     }
 
     /// @notice Locks the underlying token, mints yeToken, and optionally bridges it to a Layer Y.
-    /// @dev Uses EIP-2612 permit to transfer the underlying token from the sender to itself.
-    function _deposit(
-        uint256 assets,
-        bytes calldata permitData,
-        uint32 destinationNetworkId,
-        address destinationAddress,
-        bool forceUpdateGlobalExitRoot,
-        uint256 maxShares
-    ) internal returns (uint256 shares, uint256 spentAssets) {
-        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
-
-        // Use the permit.
-        if (permitData.length > 0) {
-            LibPermit.permit(address($.underlyingToken), assets, permitData);
-        }
-
-        return _deposit(assets, destinationNetworkId, destinationAddress, forceUpdateGlobalExitRoot, maxShares);
-    }
-
-    /// @notice Locks the underlying token, mints yeToken, and optionally bridges it to a Layer Y.
     /// @param maxShares Caps the amount of yeToken that can be minted. The difference is refunded to the sender. Set to `0` to disable.
     function _deposit(
         uint256 assets,
@@ -278,6 +258,9 @@ abstract contract YieldExposedToken is
         require(assets > 0, "INVALID_AMOUNT");
         require(destinationAddress != address(0), "INVALID_ADDRESS");
 
+        // Transfer the required amount from the sender to this contract.
+        spentAssets = _receiveToken(assets);
+
         // Check for a refund.
         if (maxShares > 0) {
             uint256 requiredAssets = convertToAssets(maxShares);
@@ -287,9 +270,6 @@ abstract contract YieldExposedToken is
                 assets = requiredAssets;
             }
         }
-
-        // Transfer the required amount from the sender to this contract.
-        spentAssets = _receiveToken(assets);
 
         // Set the return values.
         shares = convertToShares(assets);
