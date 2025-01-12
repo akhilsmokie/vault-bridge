@@ -50,7 +50,28 @@ contract YeETH is YieldExposedToken {
         (shares,) = _deposit(msg.value, destinationNetworkId, destinationAddress, forceUpdateGlobalExitRoot, 0);
     }
 
+    function mintWithGasToken(uint256 shares, address receiver)
+        external
+        payable
+        whenNotPaused
+        returns (uint256 assets)
+    {
+        require(shares > 0, "INVALID_AMOUNT");
+        // The receiver is checked in the `_deposit` function.
+
+        // Mint yeToken to the receiver.
+        uint256 mintedShares;
+        (mintedShares, assets) =
+            _deposit(_assetsBeforeTransferFee(convertToAssets(shares)), lxlyId(), receiver, false, shares);
+
+        // Check the output.
+        require(mintedShares == shares, "COULD_NOT_MINT_SHARES");
+    }
+
     function _refund(uint256 refund) internal override {
+        // The order of _receiveToken and _refund dictated by _deposit makes a withdraw necessary here
+        IWETH9 weth = IWETH9(address(underlyingToken()));
+        weth.withdraw(refund);
         (bool success,) = payable(msg.sender).call{value: refund}("");
         assert(success);
     }

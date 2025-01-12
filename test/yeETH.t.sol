@@ -92,4 +92,18 @@ contract yeETHTest is Test {
 
         assertGt(shares, 0, "Should receive shares for deposit");
     }
+
+    function test_mint() public {
+        uint256 amount = 100 ether;
+
+        deal(address(this), amount + 1 ether);
+
+        // sending a bit more to test refund func
+        yeETH.mintWithGasToken{value: amount + 1 ether}(amount, address(this));
+
+        assertEq(yeETH.balanceOf(address(this)), amount); // shares minted to the sender
+        assertEq(yeETH.totalAssets(), amount);
+    }
+
+    // TODO test with reserve amount
 }

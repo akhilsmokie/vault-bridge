@@ -416,7 +416,7 @@ contract YieldExposedTokenTest is Test {
         emit BridgeEvent(
             LEAF_TYPE_ASSET, NETWORK_ID_L1, address(yeUSDC), NETWORK_ID_L2, recipient, amount, yeUSDCMetaData, 214030
         );
-        yeUSDC.depositAndBridge(amount, recipient, NETWORK_ID_L2, true, permitData);
+        yeUSDC.depositAndBridgePermit(amount, recipient, NETWORK_ID_L2, true, permitData);
         vm.stopPrank();
 
         uint256 reserveAmount = (amount * MINIMUM_RESERVE_PERCENTAGE) / 100;
