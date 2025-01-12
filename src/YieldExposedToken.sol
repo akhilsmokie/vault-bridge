@@ -245,7 +245,6 @@ abstract contract YieldExposedToken is
         // Check the input.
         require(assets > 0, "INVALID_AMOUNT");
 
-
         // Check for a refund.
         if (maxShares > 0) {
             uint256 requiredAssets = _convertToAssets(maxShares);
@@ -257,7 +256,7 @@ abstract contract YieldExposedToken is
         }
 
         // Transfer the required amount from the sender to this contract.
-        spentAssets =_receiveToken(assets);
+        spentAssets = _receiveToken(assets);
 
         // Set the return values.
         shares = _convertToShares(assets);

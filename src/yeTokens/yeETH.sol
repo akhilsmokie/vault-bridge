@@ -5,10 +5,8 @@ import {YieldExposedToken} from "../YieldExposedToken.sol";
 import {IWETH9} from "../etc/WETH9.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
-
 /// @title Yield Exposed gas token
 contract YeETH is YieldExposedToken {
-
     constructor() {
         _disableInitializers();
     }
