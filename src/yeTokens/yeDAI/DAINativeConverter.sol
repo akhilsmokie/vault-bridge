@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+pragma solidity 0.8.28;
+
+import {GenericNativeConverter} from "../GenericNativeConverter.sol";
+
+/// @title DAI Native Converter
+/// @dev No customization is required.
+/// @dev This contract does not need to be deployed. You can point DAINativeConverter proxy to GenericNativeConverter instead.
+contract DAINativeConverter is GenericNativeConverter {}
