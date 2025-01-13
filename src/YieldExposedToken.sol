@@ -482,7 +482,7 @@ abstract contract YieldExposedToken is
         // Withdraw from the reserve.
         if (amountToWithdraw > 0) {
             _burn(owner, convertToShares(amountToWithdraw));
-            $.underlyingToken.safeTransfer(receiver, amountToWithdraw);
+            _sendUnderlyingToken(receiver, amountToWithdraw);
         }
 
         // Check if the amount in the reserve was sufficient.
@@ -728,9 +728,7 @@ abstract contract YieldExposedToken is
         require(shares > 0, "INVALID_AMOUNT");
 
         // Transfer the underlying token from the sender to itself.
-        uint256 previousBalance = $.underlyingToken.balanceOf(address(this));
-        $.underlyingToken.safeTransferFrom(msg.sender, address(this), assets);
-        assets = $.underlyingToken.balanceOf(address(this)) - previousBalance;
+        assets = _receiveUnderlyingToken(msg.sender, assets);
 
         // Calculate discrepancy between the required amount of yeToken (`shares`) and the amount of the underlying token transferred from Migration Manager (`assets`).
         // Discrepancy is possible due to transfer fees of the underlying token. To offset the discrepancy, we mint more yeToken backed by the yield in the yield vault.
