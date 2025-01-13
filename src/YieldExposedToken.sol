@@ -261,21 +261,22 @@ abstract contract YieldExposedToken is
         require(assets > 0, "INVALID_AMOUNT");
         require(destinationAddress != address(0), "INVALID_ADDRESS");
 
-        // Transfer the required amount from the sender to this contract.
-        spentAssets = _receiveToken(assets);
+        // Transfer the underlying token from the sender to itself.
+        assets = _receiveUnderlyingToken(assets);
 
         // Check for a refund.
         if (maxShares > 0) {
             uint256 requiredAssets = convertToAssets(maxShares);
             if (assets > requiredAssets) {
                 uint256 refund = assets - requiredAssets;
-                _refund(refund);
+                _sendUnderlyingToken(refund);
                 assets = requiredAssets;
             }
         }
 
         // Set the return values.
         shares = convertToShares(assets);
+        spentAssets = assets;
 
         // Calculate the amount to reserve and the amount to deposit into the yield vault.
         // @note Check rounding.
@@ -309,20 +310,24 @@ abstract contract YieldExposedToken is
         emit IERC4626.Deposit(msg.sender, destinationAddress, assets, shares);
     }
 
-    /// @notice Transfer the underlying token from the sender to itself.
-    function _receiveToken(uint256 assets) internal virtual returns (uint256) {
+    /// @notice Transfers the underlying token to the sender.
+    /// @dev This function can be overridden to implement custom transfer logic.
+    function _sendUnderlyingToken(uint256 amount) internal virtual {
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+
+        // Transfer the underlying token to the sender.
+        $.underlyingToken.safeTransfer(msg.sender, amount);
+    }
+
+    /// @notice Transfers the underlying token from the sender to itself.
+    /// @dev This function can be overridden to implement custom transfer logic.
+    function _receiveUnderlyingToken(uint256 amount) internal virtual returns (uint256 receivedAmount) {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
 
         // Transfer the underlying token from the sender to itself.
         uint256 previousBalance = $.underlyingToken.balanceOf(address(this));
-        $.underlyingToken.safeTransferFrom(msg.sender, address(this), assets);
-        return $.underlyingToken.balanceOf(address(this)) - previousBalance;
-    }
-
-    /// @notice Refund the underlying token back to the sender.
-    function _refund(uint256 refund) internal virtual {
-        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
-        $.underlyingToken.safeTransfer(msg.sender, refund);
+        $.underlyingToken.safeTransferFrom(msg.sender, address(this), amount);
+        receivedAmount = $.underlyingToken.balanceOf(address(this)) - previousBalance;
     }
 
     /// @notice Locks the underlying token, mints yeToken, and optionally bridges it to a Layer Y.
