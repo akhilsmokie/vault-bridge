@@ -122,7 +122,7 @@ abstract contract YieldExposedToken is
 
     /// @notice The number of decimals of the yield exposed token.
     /// @notice The number of decimals is the same as that of the underlying token.
-    function decimals() public view virtual override(ERC20Upgradeable, IERC20Metadata) returns (uint8) {
+    function decimals() public view override(ERC20Upgradeable, IERC20Metadata) returns (uint8) {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
         return $.decimals;
     }
@@ -262,14 +262,14 @@ abstract contract YieldExposedToken is
         require(destinationAddress != address(0), "INVALID_ADDRESS");
 
         // Transfer the underlying token from the sender to itself.
-        assets = _receiveUnderlyingToken(assets);
+        assets = _receiveUnderlyingToken(msg.sender, assets);
 
         // Check for a refund.
         if (maxShares > 0) {
             uint256 requiredAssets = convertToAssets(maxShares);
             if (assets > requiredAssets) {
                 uint256 refund = assets - requiredAssets;
-                _sendUnderlyingToken(refund);
+                _sendUnderlyingToken(msg.sender, refund);
                 assets = requiredAssets;
             }
         }
@@ -308,26 +308,6 @@ abstract contract YieldExposedToken is
 
         // Emit the ERC-4626 event.
         emit IERC4626.Deposit(msg.sender, destinationAddress, assets, shares);
-    }
-
-    /// @notice Transfers the underlying token to the sender.
-    /// @dev This function can be overridden to implement custom transfer logic.
-    function _sendUnderlyingToken(uint256 amount) internal virtual {
-        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
-
-        // Transfer the underlying token to the sender.
-        $.underlyingToken.safeTransfer(msg.sender, amount);
-    }
-
-    /// @notice Transfers the underlying token from the sender to itself.
-    /// @dev This function can be overridden to implement custom transfer logic.
-    function _receiveUnderlyingToken(uint256 amount) internal virtual returns (uint256 receivedAmount) {
-        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
-
-        // Transfer the underlying token from the sender to itself.
-        uint256 previousBalance = $.underlyingToken.balanceOf(address(this));
-        $.underlyingToken.safeTransferFrom(msg.sender, address(this), amount);
-        receivedAmount = $.underlyingToken.balanceOf(address(this)) - previousBalance;
     }
 
     /// @notice Locks the underlying token, mints yeToken, and optionally bridges it to a Layer Y.
@@ -817,6 +797,26 @@ abstract contract YieldExposedToken is
     }
 
     // -----================= ::: DEV ::: =================-----
+
+    /// @notice Transfers the underlying token from an external account to itself.
+    /// @dev This function can be overridden to implement custom transfer logic.
+    function _receiveUnderlyingToken(address from, uint256 value) internal virtual returns (uint256 receivedValue) {
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+
+        // Transfer the underlying token.
+        uint256 previousBalance = $.underlyingToken.balanceOf(address(this));
+        $.underlyingToken.safeTransferFrom(from, address(this), value);
+        receivedValue = $.underlyingToken.balanceOf(address(this)) - previousBalance;
+    }
+
+    /// @notice Transfers the underlying token to an external account.
+    /// @dev This function can be overridden to implement custom transfer logic.
+    function _sendUnderlyingToken(address to, uint256 value) internal virtual {
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+
+        // Transfer the underlying token.
+        $.underlyingToken.safeTransfer(to, value);
+    }
 
     /// @notice Accounts for the transfer fee of the underlying token.
     /// @dev You must implement the same behavior as that of the underlying token for calculating the transfer fee.
