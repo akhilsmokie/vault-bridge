@@ -6,4 +6,4 @@ import {GenericYeToken} from "../GenericYeToken.sol";
 /// @title Yield Exposed USDC
 /// @dev USDC does not have a transfer fee, and no customization is required.
 /// @dev This contract does not need to be deployed. You can point yeUSDC proxy to GenericYeToken instead.
-contract yeUSDC is GenericYeToken {}
+contract YeUSDC is GenericYeToken {}

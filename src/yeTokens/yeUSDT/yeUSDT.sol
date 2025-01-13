@@ -5,7 +5,7 @@ import {YieldExposedToken} from "../../YieldExposedToken.sol";
 import {USDTTransferFeeCalculator} from "./USDTTransferFeeCalculator.sol";
 
 /// @title Yield Exposed USDT
-contract yeUSDT is YieldExposedToken, USDTTransferFeeCalculator {
+contract YeUSDT is YieldExposedToken, USDTTransferFeeCalculator {
     constructor() {
         _disableInitializers();
     }

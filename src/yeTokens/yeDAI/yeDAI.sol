@@ -6,4 +6,4 @@ import {GenericYeToken} from "../GenericYeToken.sol";
 /// @title Yield Exposed DAI
 /// @dev DAI does not have a transfer fee, and no customization is required.
 /// @dev This contract does not need to be deployed. You can point yeDAI proxy to GenericYeToken instead.
-contract yeDAI is GenericYeToken {}
+contract YeDAI is GenericYeToken {}
