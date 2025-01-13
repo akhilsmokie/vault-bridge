@@ -593,7 +593,24 @@ abstract contract YieldExposedToken is
     function yield() public view returns (uint256) {
         // The formula for caclulating yield is:
         // yield = assets reported by yield vault + reserve - yeToken total supply in assets
-        return stakedAssets() + reservedAssets() - convertToAssets(totalSupply());
+        (bool healthly, uint256 difference) = backingDifference();
+
+        // Returns zero if the backing is negative.
+        return healthly ? difference : 0;
+    }
+
+    /// @notice The difference between the total assets and the minimum assets required to back the total supply of yeToken.
+    function backingDifference() public view returns (bool healthly, uint256 difference) {
+        // Get the state.
+        uint256 totalAssets_ = totalAssets();
+        uint256 minimumAssets = convertToAssets(totalSupply());
+
+        // Calculate the difference.
+        if (totalAssets_ < minimumAssets) {
+            return (false, minimumAssets - totalAssets_);
+        } else {
+            return (true, totalAssets_ - minimumAssets);
+        }
     }
 
     /// @notice Refill the internal reserve of the underlying token by withdrawing from the yield vault.
