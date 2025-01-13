@@ -373,7 +373,12 @@ abstract contract YieldExposedToken is
 
     /// @notice How much underlying token a specific user can withdraw. (Withdrawing the underlying token burns yeToken).
     function maxWithdraw(address owner) external view override returns (uint256 maxAssets) {
-        return !paused() ? _simulateWithdraw(convertToAssets(balanceOf(owner)), false) : 0;
+        // Return zero if the balance is zero.
+        uint256 balance = balanceOf(owner);
+        if (balance == 0) return 0;
+
+        // Return the maximum amount that can be withdrawn.
+        return !paused() ? _simulateWithdraw(convertToAssets(balance), false) : 0;
     }
 
     /// @notice How much yeToken would be burned if a specific amount of the underlying token were withdrawn right now.
@@ -512,7 +517,12 @@ abstract contract YieldExposedToken is
 
     /// @notice How much yeToken a specific user can burn. (Burning yeToken unlocks the underlying token).
     function maxRedeem(address owner) external view override returns (uint256 maxShares) {
-        return !paused() ? convertToShares(_simulateWithdraw(convertToAssets(balanceOf(owner)), false)) : 0;
+        // Return zero if the balance is zero.
+        uint256 balance = balanceOf(owner);
+        if (balance == 0) return 0;
+
+        // Return the maximum amount that can be redeemed.
+        return !paused() ? convertToShares(_simulateWithdraw(convertToAssets(balance), false)) : 0;
     }
 
     /// @notice How much underlying token would be unlocked if a specific amount of yeToken were burned right now.
