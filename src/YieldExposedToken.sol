@@ -221,6 +221,17 @@ abstract contract YieldExposedToken is
         (shares,) = _deposit(assets, $.lxlyId, receiver, false, 0);
     }
 
+    /// @notice Deposit a specific amount of the underlying token and get yeToken.
+    /// @dev Uses EIP-2612 permit to transfer the underlying token from the sender to itself.
+    function depositPermit(uint256 assets, address receiver, bytes calldata permitData)
+        external
+        whenNotPaused
+        returns (uint256 shares)
+    {
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+        (shares,) = _depositPermit(assets, permitData, $.lxlyId, receiver, false, 0);
+    }
+
     /// @notice Deposit a specific amount of the underlying token, and bridge yeToken to a Layer Y.
     /// @dev If yeToken is custom mapped on LxLy Bridge on Layer Y, the user will receive the custom token. If not, they will receive wrapped yeToken.
     function depositAndBridge(
