@@ -112,6 +112,9 @@ abstract contract YieldExposedToken is
         _approve(address(this), address(lxlyBridge_), type(uint256).max);
     }
 
+    // -----================= ::: STORAGE ::: =================-----
+
+    /// @notice The underlying token that backs yeToken.
     function underlyingToken() public view returns (IERC20) {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
         return $.underlyingToken;
@@ -143,16 +146,16 @@ abstract contract YieldExposedToken is
         return $.yieldRecipient;
     }
 
+    /// @notice The LxLy ID of this network.
+    function lxlyId() public view returns (uint32) {
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+        return $.lxlyId;
+    }
+
     /// @notice LxLy Bridge, which connects AggLayer networks.
     function lxlyBridge() public view returns (ILxLyBridge) {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
         return $.lxlyBridge;
-    }
-
-    /// @notice The network ID of the LxLy Bridge.
-    function lxlyId() public view returns (uint32) {
-        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
-        return $.lxlyId;
     }
 
     /// @notice The address of Migration Manager for this yeToken.
@@ -322,7 +325,7 @@ abstract contract YieldExposedToken is
         $.underlyingToken.safeTransfer(msg.sender, refund);
     }
 
-    /// @notice Locks the underlying token, mints yeToken, and optionally bridges it to an L2.
+    /// @notice Locks the underlying token, mints yeToken, and optionally bridges it to a Layer Y.
     /// @dev Uses EIP-2612 permit to transfer the underlying token from the sender to itself.
     function _depositPermit(
         uint256 assets,
