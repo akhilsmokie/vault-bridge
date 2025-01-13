@@ -21,7 +21,7 @@ import {ILxLyBridge} from "./etc/ILxLyBridge.sol";
 
 /// @title Yield Exposed Token
 /// @dev A base contract to create yield exposed tokens.
-/// @dev In order to not drive the complexity of the STB system up, yeToken MUST NOT have transfer or deposit and/or withdrawal fees. The underlying token on Layer X and the custom token on Layer Ys MAY have transfer fees. The yield vault MAY have deposit and/or withdrawal fees.
+/// @dev In order to not drive the complexity of the STB system up, yeToken MUST NOT have transfer or deposit and/or withdrawal fees. The underlying token on Layer X, and the underlying token and custom token on Layer Ys MAY have transfer fees. The yield vault MAY have deposit and/or withdrawal fees.
 /// @dev It is expected for yield to offset any costs incurred when transferring the underlying token to and from the yield vault, or depositing to and withdrawing from the yield vault, for the purpose of generating yield or rebalancing reserve. Those things should be taken into account when setting up or choosing the yield vault.
 abstract contract YieldExposedToken is
     Initializable,
@@ -127,7 +127,7 @@ abstract contract YieldExposedToken is
         return $.decimals;
     }
 
-    /// @notice Yield exposed tokens have an internal reserve of the underlying token from which withdrawals are serviced first.
+    /// @notice Yield exposed tokens have an internal reserve of the underlying token from which withdrawals are served first.
     /// @notice When the reserve is below the minimum threshold, it can be replenished by calling `replenishReserve`.
     function minimumReservePercentage() public view returns (uint256) {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
@@ -232,8 +232,8 @@ abstract contract YieldExposedToken is
         (shares,) = _depositPermit(assets, permitData, $.lxlyId, receiver, false, 0);
     }
 
-    /// @notice Deposit a specific amount of the underlying token, and bridge yeToken to a Layer Y.
-    /// @dev If yeToken is custom mapped on LxLy Bridge on Layer Y, the user will receive the custom token. If not, they will receive wrapped yeToken.
+    /// @notice Deposit a specific amount of the underlying token, and bridge yeToken to another network.
+    /// @dev If yeToken is custom mapped on LxLy Bridge the other network, the user will receive the custom token. If not, they will receive wrapped yeToken.
     function depositAndBridge(
         uint256 assets,
         address destinationAddress,
@@ -243,8 +243,8 @@ abstract contract YieldExposedToken is
         (shares,) = _deposit(assets, destinationNetworkId, destinationAddress, forceUpdateGlobalExitRoot, 0);
     }
 
-    /// @notice Deposit a specific amount of the underlying token, and bridge yeToken to a Layer Y.
-    // dev If yeToken is custom mapped on LxLy Bridge on Layer Y, the user will receive the custom token. If not, they will receive wrapped yeToken.
+    /// @notice Deposit a specific amount of the underlying token, and bridge yeToken to another network.
+    // dev If yeToken is custom mapped on LxLy Bridge on the other network, the user will receive the custom token. If not, they will receive wrapped yeToken.
     /// @dev Uses EIP-2612 permit to transfer the underlying token from the sender to itself.
     function depositAndBridgePermit(
         uint256 assets,
@@ -257,7 +257,7 @@ abstract contract YieldExposedToken is
             _depositPermit(assets, permitData, destinationNetworkId, destinationAddress, forceUpdateGlobalExitRoot, 0);
     }
 
-    /// @notice Locks the underlying token, mints yeToken, and optionally bridges it to a Layer Y.
+    /// @notice Locks the underlying token, mints yeToken, and optionally bridges it to another network.
     /// @param maxShares Caps the amount of yeToken that can be minted. The difference is refunded to the sender. Set to `0` to disable.
     function _deposit(
         uint256 assets,
@@ -321,7 +321,7 @@ abstract contract YieldExposedToken is
         emit IERC4626.Deposit(msg.sender, destinationAddress, assets, shares);
     }
 
-    /// @notice Locks the underlying token, mints yeToken, and optionally bridges it to a Layer Y.
+    /// @notice Locks the underlying token, mints yeToken, and optionally bridges it to another network.
     /// @dev Uses EIP-2612 permit to transfer the underlying token from the sender to itself.
     function _depositPermit(
         uint256 assets,
@@ -377,11 +377,11 @@ abstract contract YieldExposedToken is
         if (paused()) return 0;
 
         // Return zero if the balance is zero.
-        uint256 balance = balanceOf(owner);
-        if (balance == 0) return 0;
+        uint256 shares = balanceOf(owner);
+        if (shares == 0) return 0;
 
         // Return the maximum amount that can be withdrawn.
-        return _simulateWithdraw(convertToAssets(balance), false);
+        return _simulateWithdraw(convertToAssets(shares), false);
     }
 
     /// @notice How much yeToken would be burned if a specific amount of the underlying token were withdrawn right now.
@@ -476,9 +476,7 @@ abstract contract YieldExposedToken is
         shares = convertToShares(assets);
 
         // Check the input.
-        if (msg.sender != owner) {
-            _spendAllowance(owner, msg.sender, shares);
-        }
+        if (msg.sender != owner) _spendAllowance(owner, msg.sender, shares);
 
         // The amount that cannot be withdrawn at the moment.
         uint256 remainingAssets = assets;
@@ -524,11 +522,11 @@ abstract contract YieldExposedToken is
         if (paused()) return 0;
 
         // Return zero if the balance is zero.
-        uint256 balance = balanceOf(owner);
-        if (balance == 0) return 0;
+        uint256 shares = balanceOf(owner);
+        if (shares == 0) return 0;
 
         // Return the maximum amount that can be redeemed.
-        return convertToShares(_simulateWithdraw(convertToAssets(balance), false));
+        return convertToShares(_simulateWithdraw(convertToAssets(shares), false));
     }
 
     /// @notice How much underlying token would be unlocked if a specific amount of yeToken were burned right now.
@@ -602,7 +600,7 @@ abstract contract YieldExposedToken is
         return $.yieldVault.convertToAssets($.yieldVault.balanceOf(address(this)));
     }
 
-    /// @notice Yield exposed tokens have an internal reserve of the underlying token from which withdrawals are serviced first.
+    /// @notice Yield exposed tokens have an internal reserve of the underlying token from which withdrawals are served first.
     /// @notice The reserve can be refilled by calling `replenishReserve` when it is below the `minimumReservePercentage`.
     function reservedAssets() public view returns (uint256) {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
