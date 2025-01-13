@@ -601,7 +601,7 @@ abstract contract YieldExposedToken is
     }
 
     /// @notice The amount of yield available for collection.
-    /// @dev Do not forget to subrtract any assets held in the reserve temporarily after calling this function.
+    /// @dev Do not forget to subtract any assets held temporarily by the contract after using this function.
     function yield() public view returns (uint256) {
         // The formula for caclulating yield is:
         // yield = assets reported by yield vault + reserve - yeToken total supply in assets
@@ -612,6 +612,7 @@ abstract contract YieldExposedToken is
     }
 
     /// @notice The difference between the total assets and the minimum assets required to back the total supply of yeToken.
+    /// @dev Does not account for any assets held temporarily by the contract.
     function backingDifference() public view returns (bool positive, uint256 difference) {
         // Get the state.
         uint256 totalAssets_ = totalAssets();
