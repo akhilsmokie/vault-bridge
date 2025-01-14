@@ -15,7 +15,7 @@ contract USDTMigrationManager is MigrationManager, USDTTransferFeeCalculator {
         __MigrationManager_init(owner_, yeToken_, nativeConverter_);
 
         // Initialize the inherited module.
-        __USDTTransferFeeCalculator_init(address(underlyingToken()));
+        __USDTTransferFeeCalculator_init(address(underlyingToken()), address(yeToken()));
     }
 
     // -----================= ::: DEV ::: =================-----

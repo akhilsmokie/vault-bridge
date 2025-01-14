@@ -35,7 +35,7 @@ contract YeUSDT is YieldExposedToken, USDTTransferFeeCalculator {
         );
 
         // Initialize the inherited module.
-        __USDTTransferFeeCalculator_init(underlyingToken_);
+        __USDTTransferFeeCalculator_init(underlyingToken_, migrationManager_);
     }
 
     // -----================= ::: DEV ::: =================-----

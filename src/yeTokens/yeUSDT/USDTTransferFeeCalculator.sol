@@ -9,9 +9,11 @@ abstract contract USDTTransferFeeCalculator is Initializable {
      * @dev Storage of the Yield Exposed USDT contract.
      * @dev It's implemented on a custom ERC-7201 namespace to reduce the risk of storage collisions when using with upgradeable contracts.
      * @custom:storage-location erc7201:0xpolygon.storage.USDTTransferFeeCalculator
+     * @param _otherContract Points to yeUSDT in USDT Migration Manager, and vice versa.
      */
     struct USDTTransferFeeCalculatorStorage {
         address _usdt;
+        USDTTransferFeeCalculator _otherContract;
         uint256 cachedBasisPointsRate;
         uint256 cachedMaximumFee;
     }
@@ -21,8 +23,10 @@ abstract contract USDTTransferFeeCalculator is Initializable {
     bytes32 private constant _USDT_TRANSFER_FEE_CALCULATOR_STORAGE =
         0x2129ebf4f8f01a752a913500fce7539b3197582370ad69b3760f2894f19a2700;
 
+    event USDTTransferFeeParametersRecached(uint256 cachedBasisPointsRate, uint256 cachedMaximumFee);
+
     /// @param usdt_ The address of the USDT token.
-    function __USDTTransferFeeCalculator_init(address usdt_) internal onlyInitializing {
+    function __USDTTransferFeeCalculator_init(address usdt_, address otherContract_) internal onlyInitializing {
         // Check the input.
         require(usdt_ != address(0), "INVALID_USDT");
 
@@ -30,6 +34,7 @@ abstract contract USDTTransferFeeCalculator is Initializable {
         USDTTransferFeeCalculatorStorage storage $ = _getUSDTTransferFeeCalculatorStorage();
 
         $._usdt = usdt_;
+        $._otherContract = USDTTransferFeeCalculator(otherContract_);
 
         // Cache the USDT transfer fee parameters.
         recacheUsdtTransferFeeParameters();
@@ -63,11 +68,20 @@ abstract contract USDTTransferFeeCalculator is Initializable {
     // -----================= ::: YEUSDT ::: =================-----
 
     /// @notice Recache the USDT transfer fee parameters.
+    /// @notice Recaches the parameters on both yeUSDT and USDT Migration Manager.
     function recacheUsdtTransferFeeParameters() public {
         USDTTransferFeeCalculatorStorage storage $ = _getUSDTTransferFeeCalculatorStorage();
 
+        // Recache the parameters on this contract.
         $.cachedBasisPointsRate = IUSDT($._usdt).basisPointsRate();
         $.cachedMaximumFee = IUSDT($._usdt).maximumFee();
+
+        // Recache the parameters on the other contract.
+        USDTTransferFeeCalculator otherContract = $._otherContract;
+        otherContract.recacheUsdtTransferFeeParameters();
+
+        // Emit the event.
+        emit USDTTransferFeeParametersRecached($.cachedBasisPointsRate, $.cachedMaximumFee);
     }
 
     /// @dev USDT has a transfer fee.
@@ -120,7 +134,7 @@ abstract contract USDTTransferFeeCalculator is Initializable {
     }
 }
 
-/// @notice The interface of USDT token.
+/// @notice The interface of the USDT token.
 interface IUSDT {
     function basisPointsRate() external view returns (uint256);
     function maximumFee() external view returns (uint256);
