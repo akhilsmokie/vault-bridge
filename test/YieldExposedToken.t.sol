@@ -74,7 +74,8 @@ contract YieldExposedTokenTest is Test {
     uint8 internal constant LEAF_TYPE_ASSET = 0;
     bytes32 internal constant PERMIT_TYPEHASH =
         keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
-    bytes4 private constant PERMIT_SIGNATURE = 0xd505accf;
+    bytes4 internal constant PERMIT_SIGNATURE = 0xd505accf;
+    string internal constant YEUSDC_VERSION = "1.0.0";
 
     uint256 internal mainnetFork;
     YeUSDC internal yeUSDC;
@@ -110,6 +111,12 @@ contract YieldExposedTokenTest is Test {
     );
     event Deposit(address indexed sender, address indexed owner, uint256 assets, uint256 shares);
     event ReserveRebalanced(uint256 reservedAssets);
+    event YieldCollected(address indexed yieldRecipient, uint256 yeTokenAmount);
+    event YieldRecipientSet(address indexed yieldRecipient);
+    event MinimumReservePercentageSet(uint8 minimumReservePercentage);
+    event MigrationCompleted(uint32 destinationNetworkId, uint256 shares, uint256 utilizedYield);
+    event Paused(address account);
+    event Unpaused(address account);
 
     function setUp() public {
         mainnetFork = vm.createSelectFork("mainnet", 21590932);
@@ -357,6 +364,44 @@ contract YieldExposedTokenTest is Test {
         assertEq(yeUSDC.totalAssets(), amount - 1); // minus 1 because of rounding
     }
 
+    function test_depositPermit() public {
+        uint256 amount = 100;
+
+        deal(USDC, sender, amount);
+
+        bytes32 domainSeparator = IERC20Permit(USDC).DOMAIN_SEPARATOR();
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            senderPrivateKey,
+            keccak256(
+                abi.encodePacked(
+                    "\x19\x01",
+                    domainSeparator, // remember to use the domain separator of the underlying token
+                    keccak256(
+                        abi.encode(
+                            PERMIT_TYPEHASH, sender, address(yeUSDC), amount, vm.getNonce(sender), block.timestamp
+                        )
+                    )
+                )
+            )
+        );
+        bytes memory permitData =
+            abi.encodeWithSelector(PERMIT_SIGNATURE, sender, address(yeUSDC), amount, block.timestamp, v, r, s);
+
+        vm.startPrank(sender);
+        vm.expectEmit();
+        emit Deposit(sender, recipient, amount, amount);
+        yeUSDC.depositPermit(amount, recipient, permitData);
+        vm.stopPrank();
+
+        uint256 reserveAmount = (amount * MINIMUM_RESERVE_PERCENTAGE) / 100;
+        assertEq(IERC20(USDC).balanceOf(address(yeUSDC)), reserveAmount);
+        assertEq(yeUSDC.balanceOf(recipient), amount); // shares minted to the recipient
+        assertEq(yeUSDC.reservedAssets(), reserveAmount);
+        assertEq(yeUSDC.stakedAssets(), amount - reserveAmount - 1); // minus 1 because of rounding
+        assertEq(yeUSDC.totalAssets(), amount - 1); // minus 1 because of rounding
+    }
+
     function test_depositAndBridge() public {
         uint256 amount = 100;
 
@@ -468,7 +513,7 @@ contract YieldExposedTokenTest is Test {
         vm.startPrank(sender);
         IERC20(USDC).approve(address(yeUSDC), initialAmount);
         yeUSDC.deposit(initialAmount, sender);
-        assertEq(IERC20(USDC).balanceOf(sender), 0); // make sure sender has no deposited all USDC
+        assertEq(IERC20(USDC).balanceOf(sender), 0); // make sure sender has not deposited all USDC
         assertEq(yeUSDC.balanceOf(sender), initialAmount); // sender gets 100 shares
 
         uint256 withdrawAmount = 110; // withdraw amount is greater than total assets (100)
@@ -533,6 +578,393 @@ contract YieldExposedTokenTest is Test {
         yeUSDC.rebalanceReserve();
         assertEq(IERC20(USDC).balanceOf(address(yeUSDC)), reserveAmount);
     }
+
+    function test_collectYield() public {
+        vm.expectRevert(); // only owner can claim yield
+        yeUSDC.collectYield();
+
+        vm.expectRevert("NO_YIELD"); // no reserved and staked assets
+        vm.prank(owner);
+        yeUSDC.collectYield();
+
+        uint256 amount = 100;
+
+        // create reserve of 10 assets and 89 staked assets
+        deal(USDC, sender, amount + TRANSFER_FEE);
+        vm.startPrank(sender);
+        IERC20(USDC).approve(address(yeUSDC), amount + TRANSFER_FEE);
+        yeUSDC.mint(amount, sender);
+        vm.stopPrank();
+
+        uint256 stakedShares = 84403857686151; // 89 assets (value according to USDC vault market price)
+        uint256 yield = 89;
+
+        deal(USDC_VAULT, address(yeUSDC), stakedShares * 2); // doubling the staked assets will create a yield of 89
+
+        vm.expectEmit();
+        emit YieldCollected(yieldRecipient, yield);
+        vm.prank(owner);
+        yeUSDC.collectYield();
+
+        vm.assertEq(yeUSDC.balanceOf(yieldRecipient), yield);
+    }
+
+    function test_setYieldRecipient_no_yield() public {
+        address newRecipient = makeAddr("newRecipient");
+        vm.expectRevert(); // only owner can claim yield
+        yeUSDC.setYieldRecipient(newRecipient);
+
+        vm.expectRevert("INVALID_YIELD_RECIPIENT");
+        vm.prank(owner);
+        yeUSDC.setYieldRecipient(address(0));
+
+        assertEq(yeUSDC.yieldRecipient(), yieldRecipient);
+
+        vm.expectEmit();
+        emit YieldRecipientSet(newRecipient);
+        vm.prank(owner);
+        yeUSDC.setYieldRecipient(newRecipient);
+        assertEq(yeUSDC.yieldRecipient(), newRecipient);
+    }
+
+    function test_setYieldRecipient_with_yield() public {
+        address newRecipient = makeAddr("newRecipient");
+        uint256 amount = 100;
+
+        // generate yield
+        uint256 stakedShares = 84403857686151;
+        uint256 yield = 89;
+        deal(USDC, sender, amount + TRANSFER_FEE);
+        vm.startPrank(sender);
+        IERC20(USDC).approve(address(yeUSDC), amount + TRANSFER_FEE);
+        yeUSDC.mint(amount, sender);
+        vm.stopPrank();
+        deal(USDC_VAULT, address(yeUSDC), stakedShares * 2);
+
+        assertEq(yeUSDC.yieldRecipient(), yieldRecipient);
+
+        vm.expectEmit();
+        emit YieldCollected(yieldRecipient, yield);
+        vm.prank(owner);
+        yeUSDC.setYieldRecipient(newRecipient);
+        assertEq(yeUSDC.balanceOf(yieldRecipient), yield); // yield collected to the old recipient
+        assertEq(yeUSDC.yieldRecipient(), newRecipient);
+    }
+
+    function test_setMinimumReservePercentage_no_rebalance() public {
+        uint8 percentage = 20;
+        vm.expectRevert(); // only owner can set minimum reserve percentage
+        yeUSDC.setMinimumReservePercentage(percentage);
+
+        vm.expectRevert("INVALID_PERCENTAGE");
+        vm.prank(owner);
+        yeUSDC.setMinimumReservePercentage(101);
+
+        assertEq(yeUSDC.minimumReservePercentage(), MINIMUM_RESERVE_PERCENTAGE);
+
+        vm.expectEmit();
+        emit MinimumReservePercentageSet(percentage);
+        vm.prank(owner);
+        yeUSDC.setMinimumReservePercentage(percentage);
+        assertEq(yeUSDC.minimumReservePercentage(), percentage);
+    }
+
+    function test_setMinimumReservePercentage_with_rebalance() public {
+        uint256 amount = 100;
+        uint8 percentage = 20;
+        uint256 reserveAmount = (amount * MINIMUM_RESERVE_PERCENTAGE) / 100; // 10
+
+        deal(USDC, sender, amount);
+        // create reserve
+        vm.startPrank(sender);
+        IERC20(USDC).approve(address(yeUSDC), amount);
+        yeUSDC.deposit(amount, recipient);
+        vm.stopPrank();
+
+        deal(USDC, address(yeUSDC), amount); // add more assets to the reserve
+        vm.expectEmit();
+        emit ReserveRebalanced(reserveAmount * 2);
+        vm.expectEmit();
+        emit MinimumReservePercentageSet(percentage);
+        vm.prank(owner);
+        yeUSDC.setMinimumReservePercentage(percentage);
+        assertEq(yeUSDC.minimumReservePercentage(), percentage);
+    }
+
+    function testFuzz_setMinimumReservePercentage(uint8 percentage) public {
+        vm.assume(percentage <= 100);
+        vm.prank(owner);
+        yeUSDC.setMinimumReservePercentage(percentage);
+        assertEq(yeUSDC.minimumReservePercentage(), percentage);
+    }
+
+    function test_redeem() public {
+        uint256 initialAmount = 100;
+        uint256 redeemAmount = 99; // 1 lost due to rounding
+
+        vm.startPrank(owner);
+        yeUSDC.pause();
+        vm.expectRevert(EnforcedPause.selector);
+        yeUSDC.redeem(redeemAmount, sender, sender);
+        yeUSDC.unpause();
+        vm.stopPrank();
+
+        deal(USDC, sender, initialAmount);
+
+        vm.startPrank(sender);
+        IERC20(USDC).approve(address(yeUSDC), initialAmount);
+        yeUSDC.deposit(initialAmount, sender);
+        assertEq(IERC20(USDC).balanceOf(sender), 0);
+        assertEq(yeUSDC.balanceOf(sender), initialAmount);
+
+        yeUSDC.redeem(redeemAmount, sender, sender); // redeem from both staked and reserved assets
+        assertEq(IERC20(USDC).balanceOf(sender), redeemAmount);
+    }
+
+    function test_completeMigration_no_discrepancy() public {
+        uint256 assets = 100;
+        uint256 shares = 100;
+
+        vm.startPrank(owner);
+        yeUSDC.pause();
+        vm.expectRevert(EnforcedPause.selector);
+        yeUSDC.completeMigration(assets, NETWORK_ID_L2, shares);
+        yeUSDC.unpause();
+        vm.stopPrank();
+
+        vm.expectRevert("UNAUTHORIZED");
+        yeUSDC.completeMigration(assets, NETWORK_ID_L2, shares);
+
+        vm.expectRevert("INVALID_NETWORK_ID");
+        vm.prank(migrationManager);
+        yeUSDC.completeMigration(assets, NETWORK_ID_L1, shares);
+
+        vm.expectRevert("INVALID_AMOUNT");
+        vm.prank(migrationManager);
+        yeUSDC.completeMigration(assets, NETWORK_ID_L2, 0);
+
+        deal(USDC, migrationManager, assets);
+        vm.startPrank(migrationManager);
+        IERC20(USDC).approve(address(yeUSDC), assets);
+
+        vm.expectEmit();
+        emit BridgeEvent(
+            LEAF_TYPE_ASSET, NETWORK_ID_L1, address(yeUSDC), NETWORK_ID_L2, address(0), shares, yeUSDCMetaData, 214030
+        );
+        vm.expectEmit();
+        emit Deposit(migrationManager, address(yeUSDC), assets, shares);
+        vm.expectEmit();
+        emit MigrationCompleted(NETWORK_ID_L2, shares, 0);
+        yeUSDC.completeMigration(assets, NETWORK_ID_L2, shares);
+        vm.stopPrank();
+    }
+
+    function test_completeMigration_with_discrepancy() public {
+        uint256 assets = 100;
+        uint256 shares = 110;
+
+        deal(USDC, migrationManager, assets);
+
+        vm.startPrank(migrationManager);
+        IERC20(USDC).approve(address(yeUSDC), assets);
+
+        vm.expectRevert("INSUFFICIENT_YIELD_TO_COVER_FOR_DISCREPANCY");
+        yeUSDC.completeMigration(assets, NETWORK_ID_L2, shares);
+        vm.stopPrank();
+
+        // generate yield
+        uint256 stakedShares = 84403857686151;
+        deal(USDC, sender, assets + TRANSFER_FEE);
+        vm.startPrank(sender);
+        IERC20(USDC).approve(address(yeUSDC), assets + TRANSFER_FEE);
+        yeUSDC.mint(assets, sender);
+        vm.stopPrank();
+        deal(USDC_VAULT, address(yeUSDC), stakedShares * 2);
+
+        vm.expectEmit();
+        emit BridgeEvent(
+            LEAF_TYPE_ASSET, NETWORK_ID_L1, address(yeUSDC), NETWORK_ID_L2, address(0), shares, yeUSDCMetaData, 214030
+        );
+        vm.expectEmit();
+        emit Deposit(migrationManager, address(yeUSDC), assets, shares);
+        vm.expectEmit();
+        emit MigrationCompleted(NETWORK_ID_L2, shares, shares - assets); // 10 shares utilized for discrepancy
+        vm.prank(migrationManager);
+        yeUSDC.completeMigration(assets, NETWORK_ID_L2, shares);
+    }
+
+    function test_maxDeposit() public {
+        assertEq(yeUSDC.maxDeposit(address(0)), type(uint256).max);
+
+        vm.prank(owner);
+        yeUSDC.pause();
+        assertEq(yeUSDC.maxDeposit(address(0)), 0);
+    }
+
+    function test_previewDeposit() public {
+        vm.startPrank(owner);
+        yeUSDC.pause();
+        vm.expectRevert(EnforcedPause.selector);
+        yeUSDC.previewDeposit(100);
+        yeUSDC.unpause();
+        vm.stopPrank();
+
+        vm.expectRevert("INVALID_AMOUNT");
+        yeUSDC.previewDeposit(0);
+
+        yeUSDC.previewDeposit(100);
+        vm.assertEq(yeUSDC.previewDeposit(100), 100);
+    }
+
+    function test_maxMint() public {
+        assertEq(yeUSDC.maxMint(address(0)), type(uint256).max);
+
+        vm.prank(owner);
+        yeUSDC.pause();
+        assertEq(yeUSDC.maxMint(address(0)), 0);
+    }
+
+    function test_previewMint() public {
+        vm.startPrank(owner);
+        yeUSDC.pause();
+        vm.expectRevert(EnforcedPause.selector);
+        yeUSDC.previewMint(100);
+        yeUSDC.unpause();
+        vm.stopPrank();
+
+        vm.expectRevert("INVALID_AMOUNT");
+        yeUSDC.previewMint(0);
+
+        yeUSDC.previewMint(100);
+        vm.assertEq(yeUSDC.previewMint(100), 110);
+    }
+
+    function test_maxWithdraw() public {
+        vm.startPrank(owner);
+        yeUSDC.pause();
+        vm.assertEq(yeUSDC.maxWithdraw(address(0)), 0);
+        yeUSDC.unpause();
+        vm.stopPrank();
+
+        assertEq(yeUSDC.maxWithdraw(address(0)), 0); // 0 if no shares
+
+        uint256 amount = 100;
+        deal(USDC, sender, amount);
+        vm.startPrank(sender);
+        IERC20(USDC).approve(address(yeUSDC), amount);
+        yeUSDC.deposit(amount, sender);
+        vm.stopPrank();
+
+        assertEq(yeUSDC.maxWithdraw(sender), amount - 1); // 1 lost due to rounding
+    }
+
+    function test_previewWithdraw() public {
+        vm.startPrank(owner);
+        yeUSDC.pause();
+        vm.expectRevert(EnforcedPause.selector);
+        yeUSDC.previewWithdraw(100);
+        yeUSDC.unpause();
+        vm.stopPrank();
+
+        vm.expectRevert("INVALID_AMOUNT");
+        yeUSDC.previewWithdraw(0);
+
+        // create reserve of 10 assets
+        uint256 amount = 100;
+        deal(USDC, sender, amount);
+        vm.startPrank(sender);
+        IERC20(USDC).approve(address(yeUSDC), amount);
+        yeUSDC.deposit(amount, sender);
+        vm.stopPrank();
+
+        vm.expectRevert("AMOUNT_TOO_LARGE");
+        yeUSDC.previewWithdraw(110);
+
+        vm.assertEq(yeUSDC.previewWithdraw(10), 10); // reserve assets
+        vm.assertEq(yeUSDC.previewWithdraw(99), 99); // reserve + staked assets
+    }
+
+    function test_maxRedeem() public {
+        vm.startPrank(owner);
+        yeUSDC.pause();
+        vm.assertEq(yeUSDC.maxRedeem(sender), 0);
+        yeUSDC.unpause();
+        vm.stopPrank();
+
+        assertEq(yeUSDC.maxRedeem(sender), 0); // 0 if no shares
+
+        // create reserve of 10 assets and 89 staked assets
+        uint256 amount = 100;
+        deal(USDC, sender, amount);
+        vm.startPrank(sender);
+        IERC20(USDC).approve(address(yeUSDC), amount);
+        yeUSDC.deposit(amount, sender);
+        vm.stopPrank();
+
+        assertEq(yeUSDC.maxRedeem(sender), amount - 1); // 1 lost due to rounding
+    }
+
+    function test_previewRedeem() public {
+        vm.startPrank(owner);
+        yeUSDC.pause();
+        vm.expectRevert(EnforcedPause.selector);
+        yeUSDC.previewRedeem(100);
+        yeUSDC.unpause();
+        vm.stopPrank();
+
+        vm.expectRevert("INVALID_AMOUNT");
+        yeUSDC.previewRedeem(0);
+
+        // create reserve of 10 assets and 89 staked assets
+        uint256 amount = 100;
+        deal(USDC, sender, amount);
+        vm.startPrank(sender);
+        IERC20(USDC).approve(address(yeUSDC), amount);
+        yeUSDC.deposit(amount, sender);
+        vm.stopPrank();
+
+        vm.expectRevert("AMOUNT_TOO_LARGE");
+        yeUSDC.previewRedeem(110);
+
+        vm.assertEq(yeUSDC.previewRedeem(10), 10); // reserve assets
+        vm.assertEq(yeUSDC.previewRedeem(99), 99); // reserve + staked assets
+    }
+
+    function test_reservePercentage() public {
+        // create reserve of 10 assets
+        uint256 amount = 100;
+        deal(USDC, sender, amount);
+        vm.startPrank(sender);
+        IERC20(USDC).approve(address(yeUSDC), amount);
+        yeUSDC.deposit(amount, sender);
+        vm.stopPrank();
+
+        assertEq(yeUSDC.reservePercentage(), MINIMUM_RESERVE_PERCENTAGE);
+    }
+
+    function test_pause_unpause() public {
+        vm.expectRevert();
+        yeUSDC.pause();
+
+        vm.expectRevert();
+        yeUSDC.unpause();
+
+        vm.startPrank(owner);
+        vm.expectEmit();
+        emit Paused(owner);
+        yeUSDC.pause();
+
+        vm.expectEmit();
+        emit Unpaused(owner);
+        yeUSDC.unpause();
+        vm.stopPrank();
+    }
+
+    function test_version() public view {
+        assertEq(yeUSDC.version(), YEUSDC_VERSION);
+    }
+
+    //TODO: test claimAndWithdraw
 
     function test_approve() public {
         assertTrue(yeUSDC.approve(address(0xBEEF), 1e18));
