@@ -49,9 +49,8 @@ jobs:
         uses: oven-sh/setup-bun@v2
 
       - name: Run Forge tests
-        env:
-          INFURA_TOKEN: ${{ secrets.INFURA_TOKEN }}
         run: |
+          echo INFURA_TOKEN=${{ secrets.INFURA_TOKEN }} >> .env
           bun install
           forge test -vvv
         id: test
