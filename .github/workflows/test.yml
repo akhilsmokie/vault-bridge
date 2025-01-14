@@ -43,7 +43,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          apt-get update && apt-get install unzip -y
+          sudo apt-get update && sudo apt-get install unzip -y
 
       - name: Install Bun
         uses: oven-sh/setup-bun@v2
