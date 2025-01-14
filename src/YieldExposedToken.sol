@@ -638,11 +638,8 @@ abstract contract YieldExposedToken is
         uint256 minimumAssets = convertToAssets(totalSupply());
 
         // Calculate the difference.
-        if (totalAssets_ < minimumAssets) {
-            return (false, minimumAssets - totalAssets_);
-        } else {
-            return (true, totalAssets_ - minimumAssets);
-        }
+        return
+            totalAssets_ >= minimumAssets ? (true, totalAssets_ - minimumAssets) : (false, minimumAssets - totalAssets_);
     }
 
     /// @notice Refill the internal reserve of the underlying token by withdrawing from the yield vault.
