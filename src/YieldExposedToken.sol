@@ -223,13 +223,13 @@ abstract contract YieldExposedToken is
 
     /// @notice Deposit a specific amount of the underlying token and get yeToken.
     /// @dev Uses EIP-2612 permit to transfer the underlying token from the sender to itself.
-    function depositPermit(uint256 assets, address receiver, bytes calldata permitData)
+    function depositWithPermit(uint256 assets, address receiver, bytes calldata permitData)
         external
         whenNotPaused
         returns (uint256 shares)
     {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
-        (shares,) = _depositPermit(assets, permitData, $.lxlyId, receiver, false, 0);
+        (shares,) = _depositWithPermit(assets, permitData, $.lxlyId, receiver, false, 0);
     }
 
     /// @notice Deposit a specific amount of the underlying token, and bridge yeToken to another network.
@@ -246,15 +246,16 @@ abstract contract YieldExposedToken is
     /// @notice Deposit a specific amount of the underlying token, and bridge yeToken to another network.
     // dev If yeToken is custom mapped on LxLy Bridge on the other network, the user will receive the custom token. If not, they will receive wrapped yeToken.
     /// @dev Uses EIP-2612 permit to transfer the underlying token from the sender to itself.
-    function depositAndBridgePermit(
+    function depositAndBridgeWithPermit(
         uint256 assets,
         address destinationAddress,
         uint32 destinationNetworkId,
         bool forceUpdateGlobalExitRoot,
         bytes calldata permitData
     ) external whenNotPaused returns (uint256 shares) {
-        (shares,) =
-            _depositPermit(assets, permitData, destinationNetworkId, destinationAddress, forceUpdateGlobalExitRoot, 0);
+        (shares,) = _depositWithPermit(
+            assets, permitData, destinationNetworkId, destinationAddress, forceUpdateGlobalExitRoot, 0
+        );
     }
 
     /// @notice Locks the underlying token, mints yeToken, and optionally bridges it to another network.
@@ -323,7 +324,7 @@ abstract contract YieldExposedToken is
 
     /// @notice Locks the underlying token, mints yeToken, and optionally bridges it to another network.
     /// @dev Uses EIP-2612 permit to transfer the underlying token from the sender to itself.
-    function _depositPermit(
+    function _depositWithPermit(
         uint256 assets,
         bytes calldata permitData,
         uint32 destinationNetworkId,
