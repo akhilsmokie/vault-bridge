@@ -128,10 +128,10 @@ abstract contract MigrationManager is Initializable, OwnableUpgradeable, Pausabl
             require(originAddress == $.nativeConverter, "NOT_NATIVE_CONVERTER");
 
             // Decode the amount.
-            (uint256 assets, uint256 shares) = abi.decode(instructionData, (uint256, uint256));
+            (uint256 shares, uint256 assets) = abi.decode(instructionData, (uint256, uint256));
 
             // Complete the migration.
-            $.yeToken.completeMigration(_assetsAfterTransferFee(assets), originNetwork, shares);
+            $.yeToken.completeMigration(originNetwork, shares, _assetsAfterTransferFee(assets));
         } else {
             revert("INVALID_CROSS_NETWORK_INSTRUCTION");
         }

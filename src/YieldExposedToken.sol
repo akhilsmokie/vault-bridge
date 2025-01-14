@@ -59,9 +59,9 @@ abstract contract YieldExposedToken is
     // Events.
     event ReserveRebalanced(uint256 reservedAssets);
     event YieldCollected(address indexed yieldRecipient, uint256 yeTokenAmount);
-    event MigrationCompleted(uint32 destinationNetworkId, uint256 shares, uint256 utilizedYield);
-    event YieldRecipientSet(address indexed yieldRecipient);
-    event MinimumReservePercentageSet(uint8 minimumReservePercentage);
+    event MigrationCompleted(uint32 indexed destinationNetworkId, uint256 indexed shares, uint256 utilizedYield);
+    event YieldRecipientChanged(address indexed yieldRecipient);
+    event MinimumReservePercentageChanged(uint8 minimumReservePercentage);
 
     /// @dev `decimals` will match the underlying token.
     /// @param minimumReservePercentage_ 1 is 1%.
@@ -733,10 +733,10 @@ abstract contract YieldExposedToken is
 
     /// @notice Completes migration of backing in the underlying token from a Layer Y to Layer X by minting and locking up the required amount of yeToken in LxLy Bridge.
     /// @notice This function can be called by the Migration Manager only.
-    /// @param assets The amount of the underlying token to transfer from Migration Manager to self.
     /// @param destinationNetworkId The LxLy ID of Layer Y the backing is being migrated from.
     /// @param shares The required amount of yeToken to mint and lock up in LxLy Bridge. Yield may be utilized to offset transfer fees of the underlying token.
-    function completeMigration(uint256 assets, uint32 destinationNetworkId, uint256 shares) external whenNotPaused {
+    /// @param assets The amount of the underlying token to transfer from Migration Manager to self.
+    function completeMigration(uint32 destinationNetworkId, uint256 shares, uint256 assets) external whenNotPaused {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
 
         // Check the inputs.
@@ -799,7 +799,7 @@ abstract contract YieldExposedToken is
         $.yieldRecipient = yieldRecipient_;
 
         // Emit the event.
-        emit YieldRecipientSet(yieldRecipient_);
+        emit YieldRecipientChanged(yieldRecipient_);
     }
 
     /// @notice Sets the minimum reserve percentage.
@@ -818,7 +818,7 @@ abstract contract YieldExposedToken is
         _rebalanceReserve(false, true);
 
         // Emit the event.
-        emit MinimumReservePercentageSet(minimumReservePercentage_);
+        emit MinimumReservePercentageChanged(minimumReservePercentage_);
     }
 
     // -----================= ::: ADMIN ::: =================-----

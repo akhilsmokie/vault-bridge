@@ -37,11 +37,10 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
     struct NativeConverterStorage {
         IERC20Plus customToken;
         IERC20 underlyingToken;
-        uint256 historicalMintedCustomToken;
+        uint256 mintedCustomToken;
         uint256 backingOnLayerY;
-        uint256 historicalMigratedBacking;
         // @note Using 1 for 1%.
-        uint256 maximumMigrationPercentage;
+        uint256 nonMigratableBackingPercentage;
         uint32 lxlyId;
         ILxLyBridge lxlyBridge;
         uint32 layerXNetworkId;
@@ -54,20 +53,20 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         0xb6887066a093cfbb0ec14b46507f657825a892fd6a4c4a1ef4fc83e8c7208c00;
 
     // Events.
-    event MigrationStarted(address indexed sender, uint256 amount);
-    event MaximumMigrationPercentageSet(uint256 maximumMigrationPercentage);
+    event MigrationStarted(address indexed sender, uint256 indexed customTokenAmount, uint256 backingAmount);
+    event NonMigratableBackingPercentageChanged(uint256 nonMigratableBackingPercentage);
 
     /// @param originalUnderlyingTokenDecimals_ The number of decimals of the original underlying token on Layer X. The `customToken` and `underlyingToken` must have the same number of decimals as the original underlying token.
     /// @param customToken_ The token custom mapped to the custom token on LxLy Bridge on Layer Y.
     /// @param underlyingToken_ The token that represents the original underlying token on Layer Y.
-    /// @param maximumMigrationPercentage_ The maximum percentage of the total custom token minted by Native Converter on Layer Y for which backing can be migrated to Layer X. 1 is 1%. The limit does not apply to the owner.
+    /// @param nonMigratableBackingPercentage_ The percentage of the total custom token minted by Native Converter on Layer Y for which backing cannot be migrated to Layer X; 1 is 1%. The limit does not apply to the owner.
     /// @param migrationManager_ The address of Migration Manager on Layer X.
     function __NativeConverter_init(
         address owner_,
         uint8 originalUnderlyingTokenDecimals_,
         address customToken_,
         address underlyingToken_,
-        uint256 maximumMigrationPercentage_,
+        uint256 nonMigratableBackingPercentage_,
         address lxlyBridge_,
         uint32 layerXNetworkId_,
         address migrationManager_
@@ -76,7 +75,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         require(owner_ != address(0), "INVALID_OWNER");
         require(customToken_ != address(0), "INVALID_CUSTOM_TOKEN");
         require(underlyingToken_ != address(0), "INVALID_UNDERLYING_TOKEN");
-        require(maximumMigrationPercentage_ <= 100, "INVALID_MIGRATION_LIMIT");
+        require(nonMigratableBackingPercentage_ <= 100, "INVALID_MINIMUM_BACKING_PERCENTAGE");
         require(lxlyBridge_ != address(0), "INVALID_BRIDGE");
         require(migrationManager_ != address(0), "INVALID_MIGRATION_MANAGER");
 
@@ -98,7 +97,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
 
         $.customToken = IERC20Plus(customToken_);
         $.underlyingToken = IERC20(underlyingToken_);
-        $.maximumMigrationPercentage = maximumMigrationPercentage_;
+        $.nonMigratableBackingPercentage = nonMigratableBackingPercentage_;
         $.lxlyId = ILxLyBridge(lxlyBridge_).networkID();
         $.lxlyBridge = ILxLyBridge(lxlyBridge_);
         $.layerXNetworkId = layerXNetworkId_;
@@ -123,25 +122,25 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         return $.underlyingToken;
     }
 
-    /// @notice The historical amount of the custom token minted by Native Converter on Layer Y.
-    /// @notice The amount decreases only when Native Converter burns the custom token.
-    function historicalMintedCustomToken() public view returns (uint256) {
+    /// @notice The amount of the custom token minted by Native Converter on Layer Y.
+    /// @dev The amount decreases when Native Converter burns the custom token.
+    function mintedCustomToken() public view returns (uint256) {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
-        return $.historicalMintedCustomToken;
+        return $.mintedCustomToken;
     }
 
-    /// @notice The amount of the underlying token that backs the custom token minted by Native Converter on Layer Y and has not been migrated to Layer X.
+    /// @notice The amount of the underlying token that backs the custom token minted by Native Converter on Layer Y that has not been migrated to Layer X.
     /// @dev The amount is used in accounting and may be different from Native Converter's underlying token balance. You may do as you wish with surplus underlying token balance, but you MUST NOT designate it as the backing.
     function backingOnLayerY() public view returns (uint256) {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
         return $.backingOnLayerY;
     }
 
-    /// @notice The maximum percentage of the total custom token minted by Native Converter on Layer Y for which backing can be migrated to Layer X.
+    /// @notice The percentage of the total custom token minted by Native Converter on Layer Y for which backing cannot be migrated to Layer X; 1 is 1%.
     /// @notice The limit does not apply to the owner.
-    function maximumMigrationPercentage() public view returns (uint256) {
+    function nonMigratableBackingPercentage() public view returns (uint256) {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
-        return $.maximumMigrationPercentage;
+        return $.nonMigratableBackingPercentage;
     }
 
     /// @notice LxLy Bridge, which connects AggLayer networks.
@@ -191,7 +190,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         $.customToken.mint(receiver, shares);
 
         // Update the custom token and backing data.
-        $.historicalMintedCustomToken += shares;
+        $.mintedCustomToken += shares;
         $.backingOnLayerY += assets;
     }
 
@@ -303,7 +302,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         }
 
         // Update the custom token and backing data.
-        $.historicalMintedCustomToken -= shares;
+        $.mintedCustomToken -= shares;
         $.backingOnLayerY -= assets;
     }
 
@@ -330,13 +329,13 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
     function migrateBackingToLayerX() external whenNotPaused {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
 
-        // Calculate the amount to migrate based on the maximum migration percentage and available backing.
+        // Calculate the amount to migrate.
         // @note Check rounding.
-        uint256 maximumAmount = _convertToAssets($.historicalMintedCustomToken * $.maximumMigrationPercentage / 100);
-        uint256 amountToMigrate = maximumAmount - $.historicalMigratedBacking;
-        require(amountToMigrate > 0, "MIGRATION_LIMIT_REACHED");
+        uint256 maximumBacking = _convertToAssets($.mintedCustomToken);
+        uint256 minimumBacking = (maximumBacking * $.nonMigratableBackingPercentage) / 100;
         uint256 backingOnLayerY_ = backingOnLayerY();
-        if (backingOnLayerY_ < amountToMigrate) amountToMigrate = backingOnLayerY_;
+        require(backingOnLayerY_ >= minimumBacking, "MIGRATION_LIMIT_REACHED");
+        uint256 amountToMigrate = backingOnLayerY_ - minimumBacking;
 
         // Migrate the backing to Layer X.
         _migrateBackingToLayerX(amountToMigrate);
@@ -357,12 +356,11 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         // Check the input.
         require(amount > 0, "INVALID_AMOUNT");
 
-        // Precalculate the amount in the custom token.
-        uint256 amountInCustomToken = _convertToShares(amount);
-
         // Update the backing data, including the historically migrated backing.
         $.backingOnLayerY -= amount;
-        $.historicalMigratedBacking += amount;
+
+        // Precalculate the amount of the custom token for which backing is being migrated.
+        uint256 amountOfCustomToken = _convertToShares(amount);
 
         // Bridge the backing to Migration Manager on Layer X.
         uint256 previousBalance = $.underlyingToken.balanceOf(address($.lxlyBridge));
@@ -374,27 +372,31 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
             $.layerXNetworkId,
             $.migrationManager,
             true,
-            abi.encode(CrossNetworkInstruction.COMPLETE_MIGRATION, amount, amountInCustomToken)
+            abi.encode(CrossNetworkInstruction.COMPLETE_MIGRATION, amountOfCustomToken, amount)
         );
 
         // Emit the event.
-        emit MigrationStarted(msg.sender, amount);
+        emit MigrationStarted(msg.sender, amountOfCustomToken, amount);
     }
 
-    /// @notice Sets the maximum migration percentage.
+    /// @notice Sets the non-migratable backing percentage.
     /// @notice The limit does not apply to the owner.
     /// @notice This function can be called by the owner only.
-    function setMaximumMigrationPercentage(uint256 maximumMigrationPercentage_) external onlyOwner whenNotPaused {
+    function setNonMigratableBackingPercentage(uint256 nonMigratableBackingPercentage_)
+        external
+        onlyOwner
+        whenNotPaused
+    {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
 
         // Check the input.
-        require(maximumMigrationPercentage_ <= 100, "INVALID_MIGRATION_LIMIT");
+        require(nonMigratableBackingPercentage_ <= 100, "INVALID_BACKING_PERCENTAGE");
 
-        // Set the maximum migration percentage.
-        $.maximumMigrationPercentage = maximumMigrationPercentage_;
+        // Set the non-migratable backing percentage.
+        $.nonMigratableBackingPercentage = nonMigratableBackingPercentage_;
 
         // Emit the event.
-        emit MaximumMigrationPercentageSet(maximumMigrationPercentage_);
+        emit NonMigratableBackingPercentageChanged(nonMigratableBackingPercentage_);
     }
 
     // -----================= ::: ADMIN ::: =================-----
