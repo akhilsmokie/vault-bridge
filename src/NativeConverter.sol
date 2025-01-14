@@ -371,6 +371,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
     }
 
     /// @notice Sets the maximum migration percentage.
+    /// @notice The limit does not apply to the owner.
     /// @notice This function can be called by the owner only.
     function setMaximumMigrationPercentage(uint256 maximumMigrationPercentage_) external onlyOwner whenNotPaused {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
