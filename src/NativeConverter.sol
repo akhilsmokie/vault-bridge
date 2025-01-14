@@ -7,6 +7,7 @@ import {PausableUpgradeable} from "@openzeppelin-contracts-upgradeable/utils/Pau
 import {IVersioned} from "./etc/IVersioned.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IERC20Plus} from "./etc/IERC20Plus.sol";
 
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -36,8 +37,9 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
     struct NativeConverterStorage {
         IERC20Plus customToken;
         IERC20 underlyingToken;
-        uint256 totalMintedCustomToken;
+        uint256 historicalMintedCustomToken;
         uint256 backingOnLayerY;
+        uint256 historicalMigratedBacking;
         // @note Using 1 for 1%.
         uint256 maximumMigrationPercentage;
         uint32 lxlyId;
@@ -55,12 +57,14 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
     event MigrationStarted(address indexed sender, uint256 amount);
     event MaximumMigrationPercentageSet(uint256 maximumMigrationPercentage);
 
+    /// @param originalUnderlyingTokenDecimals_ The number of decimals of the original underlying token on Layer X. The `customToken` and `underlyingToken` must have the same number of decimals as the original underlying token.
     /// @param customToken_ The token custom mapped to the custom token on LxLy Bridge on Layer Y.
     /// @param underlyingToken_ The token that represents the original underlying token on Layer Y.
     /// @param maximumMigrationPercentage_ The maximum percentage of the total custom token minted by Native Converter on Layer Y for which backing can be migrated to Layer X. 1 is 1%. The limit does not apply to the owner.
     /// @param migrationManager_ The address of Migration Manager on Layer X.
     function __NativeConverter_init(
         address owner_,
+        uint8 originalUnderlyingTokenDecimals_,
         address customToken_,
         address underlyingToken_,
         uint256 maximumMigrationPercentage_,
@@ -75,6 +79,15 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         require(maximumMigrationPercentage_ <= 100, "INVALID_MIGRATION_LIMIT");
         require(lxlyBridge_ != address(0), "INVALID_BRIDGE");
         require(migrationManager_ != address(0), "INVALID_MIGRATION_MANAGER");
+
+        // Check the custom token and underlying token decimals.
+        require(
+            IERC20Metadata(customToken_).decimals() == originalUnderlyingTokenDecimals_, "INVALID_CUSTOM_TOKEN_DECIMALS"
+        );
+        require(
+            IERC20Metadata(underlyingToken_).decimals() == originalUnderlyingTokenDecimals_,
+            "INVALID_UNDERLYING_TOKEN_DECIMALS"
+        );
 
         // Initialize the inherited contracts.
         __Ownable_init(owner_);
@@ -110,11 +123,11 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         return $.underlyingToken;
     }
 
-    /// @notice The total amount of the custom token minted by Native Converter on Layer Y.
-    /// @notice The amount decreases when Native Converter burns the custom token.
-    function totalMintedCustomToken() public view returns (uint256) {
+    /// @notice The historical amount of the custom token minted by Native Converter on Layer Y.
+    /// @notice The amount decreases only when Native Converter burns the custom token.
+    function historicalMintedCustomToken() public view returns (uint256) {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
-        return $.totalMintedCustomToken;
+        return $.historicalMintedCustomToken;
     }
 
     /// @notice The amount of the underlying token that backs the custom token minted by Native Converter on Layer Y and has not been migrated to Layer X.
@@ -172,13 +185,13 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         assets = _receiveUnderlyingToken(msg.sender, assets);
 
         // Set the return value.
-        shares = _convertToShares(assets, false);
+        shares = _convertToShares(assets);
 
         // Mint the custom token to the receiver.
         $.customToken.mint(receiver, shares);
 
         // Update the custom token and backing data.
-        $.totalMintedCustomToken += shares;
+        $.historicalMintedCustomToken += shares;
         $.backingOnLayerY += assets;
     }
 
@@ -221,7 +234,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         require(shares > 0, "INVALID_AMOUNT");
 
         // Switch to the underlying token.
-        uint256 assets = _convertToAssets(shares, false);
+        uint256 assets = _convertToAssets(shares);
 
         // The amount that cannot be deconverted at the moment (in the underlying token).
         uint256 remainingAssets = assets;
@@ -235,7 +248,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         if (force) require(remainingAssets == 0, "AMOUNT_TOO_LARGE");
 
         // Return the amount of the custom token that can be deconverted right now.
-        return _convertToShares(assets - remainingAssets, true);
+        return _convertToShares(assets - remainingAssets);
     }
 
     /// @notice Burn a specific amount of the custom token and unlock a respective amount of the underlying token.
@@ -259,7 +272,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
 
         // Switch to the underlying token.
         // Set the return value.
-        assets = _convertToShares(assets, false);
+        assets = _convertToShares(assets);
 
         // Get the available backing.
         uint256 backingOnLayerY_ = backingOnLayerY();
@@ -290,32 +303,22 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         }
 
         // Update the custom token and backing data.
-        $.totalMintedCustomToken -= shares;
+        $.historicalMintedCustomToken -= shares;
         $.backingOnLayerY -= assets;
     }
 
     /// @notice Tells how much a specific amount of underlying token is worth in the custom token.
-    /// @param allowRoundDownToZero Whether to revert if the amount gets rounded down to zero.
-    function _convertToShares(uint256 assets, bool allowRoundDownToZero) internal pure returns (uint256 shares) {
-        // The underlying token backs the custom token 1:1 (after accounting for different decimals).
+    function _convertToShares(uint256 assets) internal pure returns (uint256 shares) {
+        // The underlying token backs the custom token 1:1.
         // Caution! Changing this function will affect the conversion rate for the entire contract.
-        // @note Handle different decimals. MUST round down.
         shares = assets;
-
-        // Revert if the amount was rounded down to zero, if required.
-        if (!allowRoundDownToZero) require(shares != 0, "AMOUNT_TOO_SMALL");
     }
 
     /// @notice Tells how much a specific amount of the custom token is worth in the underlying token.
-    /// @param allowRoundDownToZero Whether to revert if the amount gets rounded down to zero.
-    function _convertToAssets(uint256 shares, bool allowRoundDownToZero) internal pure returns (uint256 assets) {
-        // The custom token is backed by the underlying token 1:1 (after accounting for different decimals).
+    function _convertToAssets(uint256 shares) internal pure returns (uint256 assets) {
+        // The custom token is backed by the underlying token 1:1.
         // Caution! Changing this function will affect the conversion rate for the entire contract.
-        // @note Handle different decimals. MUST round down.
         assets = shares;
-
-        // Revert if the amount was rounded down to zero, if required.
-        if (!allowRoundDownToZero) require(assets != 0, "AMOUNT_TOO_SMALL");
     }
 
     // -----================= ::: NATIVE CONVERTER ::: =================-----
@@ -329,9 +332,11 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
 
         // Calculate the amount to migrate based on the maximum migration percentage and available backing.
         // @note Check rounding.
-        uint256 maximumAmount = _convertToAssets($.totalMintedCustomToken * $.maximumMigrationPercentage / 100, false);
+        uint256 maximumAmount = _convertToAssets($.historicalMintedCustomToken * $.maximumMigrationPercentage / 100);
+        uint256 amountToMigrate = maximumAmount - $.historicalMigratedBacking;
+        require(amountToMigrate > 0, "MIGRATION_LIMIT_REACHED");
         uint256 backingOnLayerY_ = backingOnLayerY();
-        uint256 amountToMigrate = maximumAmount > backingOnLayerY_ ? backingOnLayerY_ : maximumAmount;
+        if (backingOnLayerY_ < amountToMigrate) amountToMigrate = backingOnLayerY_;
 
         // Migrate the backing to Layer X.
         _migrateBackingToLayerX(amountToMigrate);
@@ -349,14 +354,20 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
     function _migrateBackingToLayerX(uint256 amount) internal {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
 
-        // Calculate the amount of the custom token to subtract.
-        uint256 amountInCustomToken = _convertToShares(amount, false);
+        // Check the input.
+        require(amount > 0, "INVALID_AMOUNT");
 
-        // Update the backing data.
+        // Precalculate the amount in the custom token.
+        uint256 amountInCustomToken = _convertToShares(amount);
+
+        // Update the backing data, including the historically migrated backing.
         $.backingOnLayerY -= amount;
+        $.historicalMigratedBacking += amount;
 
         // Bridge the backing to Migration Manager on Layer X.
+        uint256 previousBalance = $.underlyingToken.balanceOf(address($.lxlyBridge));
         $.lxlyBridge.bridgeAsset($.layerXNetworkId, $.migrationManager, amount, address($.underlyingToken), true, "");
+        amount = $.underlyingToken.balanceOf(address($.lxlyBridge)) - previousBalance;
 
         // Bridge a message to Migration Manager on Layer X to complete the migration.
         $.lxlyBridge.bridgeMessage(

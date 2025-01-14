@@ -12,6 +12,7 @@ abstract contract GenericNativeConverter is NativeConverter {
 
     function initialize(
         address owner_,
+        uint8 originalUnderlyingTokenDecimals_,
         address customToken_,
         address wrappedUnderlyingToken_,
         uint256 dailyMigrationLimit_,
@@ -22,6 +23,7 @@ abstract contract GenericNativeConverter is NativeConverter {
         // Initialize the base implementation.
         __NativeConverter_init(
             owner_,
+            originalUnderlyingTokenDecimals_,
             customToken_,
             wrappedUnderlyingToken_,
             dailyMigrationLimit_,
