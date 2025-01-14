@@ -21,9 +21,7 @@ contract yeETHTest is Test {
     uint32 constant ZKEVM_NETWORK_ID = 1; // zkEVM
 
     function setUp() public {
-        mainnetFork = vm.createFork("mainnet");
-        // zkevmFork = vm.createFork("polygon_zkevm");
-        vm.selectFork(mainnetFork);
+        mainnetFork = vm.createSelectFork("mainnet_test", 21590932);
 
         morphoVault = IMetaMorphoV1_1Factory(METAMORPHO_FACTORY).createMetaMorpho(
             address(this), // Owner

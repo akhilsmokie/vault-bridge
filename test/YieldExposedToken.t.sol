@@ -119,7 +119,7 @@ contract YieldExposedTokenTest is Test {
     event Unpaused(address account);
 
     function setUp() public {
-        mainnetFork = vm.createSelectFork("mainnet", 21590932);
+        mainnetFork = vm.createSelectFork("mainnet_test", 21590932);
 
         yeUSDC = new YeUSDC();
         beforeInit = vm.snapshotState();
