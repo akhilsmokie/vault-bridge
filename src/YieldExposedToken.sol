@@ -610,8 +610,12 @@ abstract contract YieldExposedToken is
     /// @notice The current reserve percentage.
     /// @notice The reserve is based on the total supply of yeToken, and may not account for uncompleted migrations of backing from Layer Ys to Layer X. Please refer to `completeMigration` for more information.
     function reservePercentage() external view returns (uint256) {
+        // Return zero if the total supply is zero.
+        if (totalSupply() == 0) return 0;
+
+        // Calculate the reserve percentage.
         // @note Check rounding.
-        return (reservedAssets() * 100) / totalAssets();
+        return (reservedAssets() * 100) / totalSupply();
     }
 
     /// @notice The amount of yield available for collection.
@@ -748,7 +752,8 @@ abstract contract YieldExposedToken is
         // Calculate discrepancy between the required amount of yeToken (`shares`) and the amount of the underlying token transferred from Migration Manager (`assets`).
         // Discrepancy is possible due to transfer fees of the underlying token. To offset the discrepancy, we mint more yeToken backed by the yield in the yield vault.
         // This ensures that the amount of yeToken locked up in LxLy Bridge on Layer X matches the supply of the custom token on Layer Ys.
-        uint256 discrepancy = convertToAssets(shares) - assets;
+        uint256 sharesInAssets = convertToAssets(shares);
+        uint256 discrepancy = sharesInAssets - assets;
         uint256 yield_ = yield();
         if (discrepancy > 0) {
             require(yield_ >= assets && discrepancy <= yield_ - assets, "INSUFFICIENT_YIELD_TO_COVER_FOR_DISCREPANCY");
@@ -756,7 +761,8 @@ abstract contract YieldExposedToken is
 
         // Calculate the amount to reserve and the amount to deposit into the yield vault.
         // @note Check rounding.
-        uint256 assetsToReserve = (assets * $.minimumReservePercentage) / 100;
+        uint256 assetsToReserve = (sharesInAssets * $.minimumReservePercentage) / 100;
+        assetsToReserve = assetsToReserve > assets ? assets : assetsToReserve;
         uint256 assetsToDeposit = assets - assetsToReserve;
 
         // Deposit into the yield vault.
