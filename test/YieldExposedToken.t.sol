@@ -364,7 +364,7 @@ contract YieldExposedTokenTest is Test {
         assertEq(yeUSDC.totalAssets(), amount - 1); // minus 1 because of rounding
     }
 
-    function test_depositPermit() public {
+    function test_depositWithPermit() public {
         uint256 amount = 100;
 
         deal(USDC, sender, amount);
@@ -391,7 +391,7 @@ contract YieldExposedTokenTest is Test {
         vm.startPrank(sender);
         vm.expectEmit();
         emit Deposit(sender, recipient, amount, amount);
-        yeUSDC.depositPermit(amount, recipient, permitData);
+        yeUSDC.depositWithPermit(amount, recipient, permitData);
         vm.stopPrank();
 
         uint256 reserveAmount = (amount * MINIMUM_RESERVE_PERCENTAGE) / 100;
@@ -461,7 +461,7 @@ contract YieldExposedTokenTest is Test {
         emit BridgeEvent(
             LEAF_TYPE_ASSET, NETWORK_ID_L1, address(yeUSDC), NETWORK_ID_L2, recipient, amount, yeUSDCMetaData, 214030
         );
-        yeUSDC.depositAndBridgePermit(amount, recipient, NETWORK_ID_L2, true, permitData);
+        yeUSDC.depositAndBridgeWithPermit(amount, recipient, NETWORK_ID_L2, true, permitData);
         vm.stopPrank();
 
         uint256 reserveAmount = (amount * MINIMUM_RESERVE_PERCENTAGE) / 100;
