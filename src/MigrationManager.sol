@@ -106,7 +106,7 @@ abstract contract MigrationManager is Initializable, OwnableUpgradeable, Pausabl
 
     /// @dev Native Converter on a Layer Y calls both `bridgeAsset` and `bridgeMessage` on LxLy Bridge on `migrateBackingToLayerX`.
     /// @dev The assets must be claimed before claiming the message.
-    /// @dev The message tells Migration Manager on Layer X how much yeToken must be minted and bridged to adress zero on that Layer Y in order to equalize the total supply of yeToken and the custom token, and provide liquidity on LxLy Bridge when bridging from Layer Ys.
+    /// @dev The message tells Migration Manager on Layer X how much yeToken must be minted and bridged to address zero on that Layer Y in order to equalize the total supply of yeToken and the custom token, and provide liquidity on LxLy Bridge when bridging from Layer Ys.
     function onMessageReceived(address originAddress, uint32 originNetwork, bytes memory data)
         external
         payable
@@ -118,7 +118,7 @@ abstract contract MigrationManager is Initializable, OwnableUpgradeable, Pausabl
         require(msg.sender == address($.lxlyBridge), "NOT_LXLY_BRIDGE");
 
         // Decode the cross-network instruction.
-        (CrossNetworkInstruction instruction, bytes memory instuctionData) =
+        (CrossNetworkInstruction instruction, bytes memory instructionData) =
             abi.decode(data, (CrossNetworkInstruction, bytes));
 
         // Execute the instruction.
@@ -128,7 +128,7 @@ abstract contract MigrationManager is Initializable, OwnableUpgradeable, Pausabl
             require(originAddress == $.nativeConverter, "NOT_NATIVE_CONVERTER");
 
             // Decode the amount.
-            (uint256 assets, uint256 shares) = abi.decode(instuctionData, (uint256, uint256));
+            (uint256 assets, uint256 shares) = abi.decode(instructionData, (uint256, uint256));
 
             // Complete the migration.
             $.yeToken.completeMigration(_assetsAfterTransferFee(assets), originNetwork, shares);
@@ -163,7 +163,7 @@ abstract contract MigrationManager is Initializable, OwnableUpgradeable, Pausabl
     /// @notice Accounts for the transfer fee of the underlying token.
     /// @dev You must implement the same behavior as that of the underlying token for calculating the transfer fee.
     /// @dev If the underlying token does not have a transfer fee, the output must equal the input.
-    /// @dev This function is used for estamation purposes only.
+    /// @dev This function is used for estimation purposes only.
     /// @dev Example:
     /// @dev Fee: 2% flat
     /// @dev Input: `100`

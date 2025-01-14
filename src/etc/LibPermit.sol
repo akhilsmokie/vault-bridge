@@ -40,7 +40,7 @@ library LibPermit {
 
         // we call without checking the result, in case it fails and they don't have enough balance
         // the following transferFrom should be fail. This prevents DoS attacks from using a signature
-        // before the smartcontract call
+        // before the smart contract call
         /* solhint-disable avoid-low-level-calls */
         (bool ok,) =
             address(token).call(abi.encodeWithSelector(_PERMIT_SIGNATURE, owner, spender, value, deadline, v, r, s));

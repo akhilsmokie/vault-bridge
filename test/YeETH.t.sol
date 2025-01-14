@@ -44,7 +44,7 @@ contract yeETHTest is Test {
                 address(this), // owner
                 "Yield Exposed ETH", // name
                 "yeETH", // symbol
-                WETH, // underlyging token
+                WETH, // underlying token
                 MINIMUM_RESERVE_PERCENTAGE,
                 morphoVault, // Use our deployed Morpho vault
                 makeAddr("yield"), // mock yield recipient

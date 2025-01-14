@@ -617,7 +617,7 @@ abstract contract YieldExposedToken is
     /// @notice The amount of yield available for collection.
     /// @dev Do not forget to subtract any assets held temporarily by the contract after using this function.
     function yield() public view returns (uint256) {
-        // The formula for caclulating yield is:
+        // The formula for calculating yield is:
         // yield = assets reported by yield vault + reserve - yeToken total supply in assets
         (bool positive, uint256 difference) = backingDifference();
 
@@ -658,7 +658,7 @@ abstract contract YieldExposedToken is
     function _rebalanceReserve(bool force, bool allowRebalanceDown) public {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
 
-        // Caclulate the minimum reserve amount.
+        // Calculate the minimum reserve amount.
         uint256 reservedAssets_ = reservedAssets();
         // @note Check rounding.
         uint256 minimumReserve = convertToAssets((totalSupply() * $.minimumReservePercentage) / 100);
@@ -863,7 +863,7 @@ abstract contract YieldExposedToken is
     /// @notice Accounts for the transfer fee of the underlying token.
     /// @dev You must implement the same behavior as that of the underlying token for calculating the transfer fee.
     /// @dev If the underlying token does not have a transfer fee, the output must equal the input.
-    /// @dev This function is used for estamation purposes only.
+    /// @dev This function is used for estimation purposes only.
     /// @dev Example:
     /// @dev Fee: 2% flat
     /// @dev Input: `100`
@@ -873,7 +873,7 @@ abstract contract YieldExposedToken is
     /// @notice Accounts for the transfer fee of the underlying token.
     /// @dev You must implement the same behavior as that of the underlying token for calculating the transfer fee.
     /// @dev If the underlying token does not have a transfer fee, the output must equal the input.
-    /// @dev This function is used for estamation purposes only.
+    /// @dev This function is used for estimation purposes only.
     /// @dev Example:
     /// @dev Fee: 2% flat
     /// @dev Input:  `100`
