@@ -112,9 +112,9 @@ contract YieldExposedTokenTest is Test {
     event Deposit(address indexed sender, address indexed owner, uint256 assets, uint256 shares);
     event ReserveRebalanced(uint256 reservedAssets);
     event YieldCollected(address indexed yieldRecipient, uint256 yeTokenAmount);
-    event YieldRecipientSet(address indexed yieldRecipient);
-    event MinimumReservePercentageSet(uint8 minimumReservePercentage);
-    event MigrationCompleted(uint32 destinationNetworkId, uint256 shares, uint256 utilizedYield);
+    event YieldRecipientChanged(address indexed yieldRecipient);
+    event MinimumReservePercentageChanged(uint8 minimumReservePercentage);
+    event MigrationCompleted(uint32 indexed destinationNetworkId, uint256 indexed shares, uint256 utilizedYield);
     event Paused(address account);
     event Unpaused(address account);
 
@@ -621,7 +621,7 @@ contract YieldExposedTokenTest is Test {
         assertEq(yeUSDC.yieldRecipient(), yieldRecipient);
 
         vm.expectEmit();
-        emit YieldRecipientSet(newRecipient);
+        emit YieldRecipientChanged(newRecipient);
         vm.prank(owner);
         yeUSDC.setYieldRecipient(newRecipient);
         assertEq(yeUSDC.yieldRecipient(), newRecipient);
@@ -663,7 +663,7 @@ contract YieldExposedTokenTest is Test {
         assertEq(yeUSDC.minimumReservePercentage(), MINIMUM_RESERVE_PERCENTAGE);
 
         vm.expectEmit();
-        emit MinimumReservePercentageSet(percentage);
+        emit MinimumReservePercentageChanged(percentage);
         vm.prank(owner);
         yeUSDC.setMinimumReservePercentage(percentage);
         assertEq(yeUSDC.minimumReservePercentage(), percentage);
@@ -685,7 +685,7 @@ contract YieldExposedTokenTest is Test {
         vm.expectEmit();
         emit ReserveRebalanced(reserveAmount * 2);
         vm.expectEmit();
-        emit MinimumReservePercentageSet(percentage);
+        emit MinimumReservePercentageChanged(percentage);
         vm.prank(owner);
         yeUSDC.setMinimumReservePercentage(percentage);
         assertEq(yeUSDC.minimumReservePercentage(), percentage);
@@ -728,20 +728,20 @@ contract YieldExposedTokenTest is Test {
         vm.startPrank(owner);
         yeUSDC.pause();
         vm.expectRevert(EnforcedPause.selector);
-        yeUSDC.completeMigration(assets, NETWORK_ID_L2, shares);
+        yeUSDC.completeMigration(NETWORK_ID_L2, shares, assets);
         yeUSDC.unpause();
         vm.stopPrank();
 
         vm.expectRevert("UNAUTHORIZED");
-        yeUSDC.completeMigration(assets, NETWORK_ID_L2, shares);
+        yeUSDC.completeMigration(NETWORK_ID_L2, shares, assets);
 
         vm.expectRevert("INVALID_NETWORK_ID");
         vm.prank(migrationManager);
-        yeUSDC.completeMigration(assets, NETWORK_ID_L1, shares);
+        yeUSDC.completeMigration(NETWORK_ID_L1, shares, assets);
 
         vm.expectRevert("INVALID_AMOUNT");
         vm.prank(migrationManager);
-        yeUSDC.completeMigration(assets, NETWORK_ID_L2, 0);
+        yeUSDC.completeMigration(NETWORK_ID_L2, 0, assets);
 
         deal(USDC, migrationManager, assets);
         vm.startPrank(migrationManager);
@@ -755,7 +755,7 @@ contract YieldExposedTokenTest is Test {
         emit Deposit(migrationManager, address(yeUSDC), assets, shares);
         vm.expectEmit();
         emit MigrationCompleted(NETWORK_ID_L2, shares, 0);
-        yeUSDC.completeMigration(assets, NETWORK_ID_L2, shares);
+        yeUSDC.completeMigration(NETWORK_ID_L2, shares, assets);
         vm.stopPrank();
     }
 
@@ -769,7 +769,7 @@ contract YieldExposedTokenTest is Test {
         IERC20(USDC).approve(address(yeUSDC), assets);
 
         vm.expectRevert("INSUFFICIENT_YIELD_TO_COVER_FOR_DISCREPANCY");
-        yeUSDC.completeMigration(assets, NETWORK_ID_L2, shares);
+        yeUSDC.completeMigration(NETWORK_ID_L2, shares, assets);
         vm.stopPrank();
 
         // generate yield
@@ -790,7 +790,7 @@ contract YieldExposedTokenTest is Test {
         vm.expectEmit();
         emit MigrationCompleted(NETWORK_ID_L2, shares, shares - assets); // 10 shares utilized for discrepancy
         vm.prank(migrationManager);
-        yeUSDC.completeMigration(assets, NETWORK_ID_L2, shares);
+        yeUSDC.completeMigration(NETWORK_ID_L2, shares, assets);
     }
 
     function test_maxDeposit() public {
