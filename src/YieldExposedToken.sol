@@ -177,38 +177,38 @@ abstract contract YieldExposedToken is
     // -----================= ::: ERC-4626 ::: =================-----
 
     /// @notice The underlying token that backs yeToken.
-    function asset() public view override returns (address assetTokenAddress) {
+    function asset() public view returns (address assetTokenAddress) {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
         return address($.underlyingToken);
     }
 
     /// @notice The total backing of yeToken in the underlying token.
     /// @notice May be less that the actual amount if backing in Native Converter on Layer Ys hasn't been migrated to Layer X yet.
-    function totalAssets() public view override returns (uint256 totalManagedAssets) {
+    function totalAssets() public view returns (uint256 totalManagedAssets) {
         return stakedAssets() + reservedAssets();
     }
 
     /// @notice Tells how much a specific amount of underlying token is worth in yeToken.
-    function convertToShares(uint256 assets) public pure override returns (uint256 shares) {
+    function convertToShares(uint256 assets) public pure returns (uint256 shares) {
         // The underlying token backs yeToken 1:1.
         // Caution! Changing this function will affect the conversion rate for the entire contract.
         shares = assets;
     }
 
     /// @notice Tells how much a specific amount of yeToken is worth in the underlying token.
-    function convertToAssets(uint256 shares) public pure override returns (uint256 assets) {
+    function convertToAssets(uint256 shares) public pure returns (uint256 assets) {
         // yeToken is backed by the underlying token 1:1.
         // Caution! Changing this function will affect the conversion rate for the entire contract.
         assets = shares;
     }
 
     /// @notice How much underlying token a specific user can deposit. (Depositing the underlying token mints yeToken).
-    function maxDeposit(address) external view override returns (uint256 maxAssets) {
+    function maxDeposit(address) external view returns (uint256 maxAssets) {
         return !paused() ? type(uint256).max : 0;
     }
 
     /// @notice How much yeToken would be minted if a specific amount of the underlying token were deposited right now.
-    function previewDeposit(uint256 assets) external view override whenNotPaused returns (uint256 shares) {
+    function previewDeposit(uint256 assets) external view whenNotPaused returns (uint256 shares) {
         // Check the input.
         require(assets > 0, "INVALID_AMOUNT");
 
@@ -216,7 +216,7 @@ abstract contract YieldExposedToken is
     }
 
     /// @notice Deposit a specific amount of the underlying token and get yeToken.
-    function deposit(uint256 assets, address receiver) external override whenNotPaused returns (uint256 shares) {
+    function deposit(uint256 assets, address receiver) external whenNotPaused returns (uint256 shares) {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
         (shares,) = _deposit(assets, $.lxlyId, receiver, false, 0);
     }
@@ -274,6 +274,8 @@ abstract contract YieldExposedToken is
         require(destinationAddress != address(0), "INVALID_ADDRESS");
 
         // Transfer the underlying token from the sender to itself.
+        // @note This was mainly added to accomodate yeETH and potential other usecases.
+        // @note when sending ETH, it is converted to WETH, after which a transferFrom would be unnecessary.
         assets = _receiveUnderlyingToken(msg.sender, assets);
 
         // Check for a refund.
