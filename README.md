@@ -1,13 +1,20 @@
-# Soldeer Minimal
+# Yield Exposed Token
 
-**Minimal Forge, Soldeer, and Bun template.**
+### Stake the Bridge using Vaults and LxLy
 
-Soldeer Minimal uses Soldeer package manager instead of git modules and can run TypeScript out of box.
+A Yield Exposed Token (yeToken) is an  
+ERC4626 wrapper and LxLy bridge extension  
+enabling the simultaneous depositing and bridging of widely used tokens like WETH, USDC, USDT, DAI, etc.
 
 ## Usage
 
 **Install**
 
+Be sure to update foundry:
+```shell
+foundryup
+```
+Then
 ```shell
 forge soldeer install & bun install
 ```
@@ -24,6 +31,12 @@ forge build
 forge test
 ```
 
+Coverage with:
+```shell
+forge coverage --ir-minimum --report lcov
+genhtml -o coverage lcov.info
+```
+
 ## License
 ​
 Licensed under either of
@@ -37,4 +50,4 @@ Unless you explicitly state otherwise, any contribution intentionally submitted 
 
 ---
 
-© 2025 PT Services DMCC
+© 2025 Polygon Labs
