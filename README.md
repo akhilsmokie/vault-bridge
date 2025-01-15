@@ -18,7 +18,7 @@ A Yield Exposed Token (yeToken) is an
 - [ERC-4626](https://eips.ethereum.org/EIPS/eip-4626) vault
 - [LxLy Bridge](https://github.com/0xPolygonHermez/zkevm-contracts) extension
 
-enabling deposits and bridging of assets, such as WETH, USDC, USDT, and DAI, while producing yield.
+enabling deposits and bridging of assets such as WETH, USDC, USDT, and DAI, while producing yield.
 
 For more information, see the NatSpec documentation.
 
