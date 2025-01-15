@@ -15,7 +15,7 @@ abstract contract GenericNativeConverter is NativeConverter {
         uint8 originalUnderlyingTokenDecimals_,
         address customToken_,
         address wrappedUnderlyingToken_,
-        uint256 dailyMigrationLimit_,
+        uint256 nonMigratableBackingPercentage_,
         address lxlyBridge_,
         uint32 layerXNetworkId_,
         address migrationManager_
@@ -26,7 +26,7 @@ abstract contract GenericNativeConverter is NativeConverter {
             originalUnderlyingTokenDecimals_,
             customToken_,
             wrappedUnderlyingToken_,
-            dailyMigrationLimit_,
+            nonMigratableBackingPercentage_,
             lxlyBridge_,
             layerXNetworkId_,
             migrationManager_
