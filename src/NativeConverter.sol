@@ -264,7 +264,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
     /// @notice Burn a specific amount of the custom token and unlock a respective amount of the underlying token.
     function deconvert(uint256 shares, address receiver) external whenNotPaused returns (uint256 assets) {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
-        return deconvertAndBridge(shares, $.lxlyId, receiver, false);
+        return _deconvert(shares, $.lxlyId, receiver, false);
     }
 
     /// @notice Burn a specific amount of the custom token and unlock a respective amount of the underlying token, and bridge it to another network.
@@ -276,7 +276,23 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
     ) public whenNotPaused returns (uint256 assets) {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
 
+        // Check the input.
+        require(destinationNetworkId != $.lxlyId, "INVALID_NETWORK");
+
+        return _deconvert(shares, destinationNetworkId, destinationAddress, forceUpdateGlobalExitRoot);
+    }
+
+    /// @notice Burn a specific amount of the custom token and unlock a respective amount of the underlying token, and optionally bridge it to another network.
+    function _deconvert(
+        uint256 shares,
+        uint32 destinationNetworkId,
+        address destinationAddress,
+        bool forceUpdateGlobalExitRoot
+    ) public whenNotPaused returns (uint256 assets) {
+        NativeConverterStorage storage $ = _getNativeConverterStorage();
+
         // Check the inputs.
+        require(destinationNetworkId != $.lxlyId, "INVALID_NETWORK");
         require(assets > 0, "INVALID_AMOUNT");
         require(destinationAddress != address(0), "INVALID_ADDRESS");
 

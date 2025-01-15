@@ -245,11 +245,16 @@ abstract contract YieldExposedToken is
         uint32 destinationNetworkId,
         bool forceUpdateGlobalExitRoot
     ) external whenNotPaused returns (uint256 shares) {
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+
+        // Check the input.
+        require(destinationNetworkId != $.lxlyId, "INVALID_NETWORK");
+
         (shares,) = _deposit(assets, destinationNetworkId, destinationAddress, forceUpdateGlobalExitRoot, 0);
     }
 
     /// @notice Deposit a specific amount of the underlying token, and bridge yeToken to another network.
-    // dev If yeToken is custom mapped on LxLy Bridge on the other network, the user will receive the custom token. If not, they will receive wrapped yeToken.
+    /// @dev If yeToken is custom mapped on LxLy Bridge on the other network, the user will receive the custom token. If not, they will receive wrapped yeToken.
     /// @dev Uses EIP-2612 permit to transfer the underlying token from the sender to itself.
     function depositAndBridgeWithPermit(
         uint256 assets,
@@ -258,6 +263,11 @@ abstract contract YieldExposedToken is
         bool forceUpdateGlobalExitRoot,
         bytes calldata permitData
     ) external whenNotPaused returns (uint256 shares) {
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+
+        // Check the input.
+        require(destinationNetworkId != $.lxlyId, "INVALID_NETWORK");
+
         (shares,) = _depositWithPermit(
             assets, permitData, destinationNetworkId, destinationAddress, forceUpdateGlobalExitRoot, 0
         );
