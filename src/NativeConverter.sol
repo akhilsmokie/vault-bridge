@@ -79,20 +79,22 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         require(lxlyBridge_ != address(0), "INVALID_BRIDGE");
         require(migrationManager_ != address(0), "INVALID_MIGRATION_MANAGER");
 
-        // Check the custom token decimals (assume 18 decimals on failure).
+        // Check the custom token's decimals.
         uint8 customTokenDecimals;
         try IERC20Metadata(customToken_).decimals() returns (uint8 decimals) {
             customTokenDecimals = decimals;
         } catch {
+            // Default to 18 decimals.
             customTokenDecimals = 18;
         }
         require(customTokenDecimals == originalUnderlyingTokenDecimals_, "INVALID_CUSTOM_TOKEN_DECIMALS");
 
-        // Check the underlying token decimals (assume 18 decimals on failure).
+        // Check the underlying token's decimals.
         uint8 underlyingTokenDecimals;
-        try IERC20Metadata(underlyingToken_).decimals() returns (uint8 decimals) {
-            underlyingTokenDecimals = decimals;
+        try IERC20Metadata(underlyingToken_).decimals() returns (uint8 decimals_) {
+            underlyingTokenDecimals = decimals_;
         } catch {
+            // Default to 18 decimals.
             underlyingTokenDecimals = 18;
         }
         require(underlyingTokenDecimals == originalUnderlyingTokenDecimals_, "INVALID_UNDERLYING_TOKEN_DECIMALS");
