@@ -58,7 +58,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
 
     /// @param originalUnderlyingTokenDecimals_ The number of decimals of the original underlying token on Layer X. The `customToken` and `underlyingToken` must have the same number of decimals as the original underlying token.
     /// @param customToken_ The token custom mapped to the custom token on LxLy Bridge on Layer Y.
-    /// @param underlyingToken_ The token that represents the original underlying token on Layer Y. Important: This token MUST be either the bridge-wrapped version of the original underlying token or be custom mapped to the original underlying token on LxLy Bridge on Layer Y.
+    /// @param underlyingToken_ The token that represents the original underlying token on Layer Y. Important: This token MUST be either the bridge-wrapped version of the original underlying token, or the original underlying token must be custom mapped to this token on LxLy Bridge on Layer Y.
     /// @param nonMigratableBackingPercentage_ The percentage of the total custom token minted by Native Converter on Layer Y for which backing cannot be migrated to Layer X; 1 is 1%. The limit does not apply to the owner.
     /// @param migrationManager_ The address of Migration Manager on Layer X.
     function __NativeConverter_init(
