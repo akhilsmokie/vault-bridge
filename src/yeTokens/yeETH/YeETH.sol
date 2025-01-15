@@ -68,18 +68,14 @@ contract YeETH is YieldExposedToken {
         require(mintedShares == shares, "COULD_NOT_MINT_SHARES");
     }
 
-    function _sendUnderlyingToken(address, uint256 refund) internal override {
-        // The order of _receiveUnderlyingToken and _refundUnderlyingToken dictated by _deposit makes a withdraw necessary here
-        IWETH9 weth = IWETH9(address(underlyingToken()));
-        weth.withdraw(refund);
-        (bool success,) = payable(msg.sender).call{value: refund}("");
-        assert(success);
-    }
-
     function _receiveUnderlyingToken(address, uint256 assets) internal override returns (uint256) {
-        // convert ETH to WETH
         IWETH9 weth = IWETH9(address(underlyingToken()));
-        weth.deposit{value: assets}();
+
+        if (msg.value > 0) {
+            weth.deposit{value: assets}();
+        } else {
+            weth.transferFrom(msg.sender, address(this), assets);
+        }
         return assets;
     }
 
