@@ -16,13 +16,13 @@ A Yield Exposed Token (yeToken) is an
 - ERC-4626 vault
 - LxLy Bridge extension
 
-enabling simultaneous depositing and bridging of widely used tokens, such as WETH, USDC, USDT, and DAI.
+enabling simultaneous depositing and bridging of widely used tokens, such as WETH, USDC, USDT, DAI.
 
-For more information, see the NatSpec.
+For more information, see the NatSpec documentation.
 
 ## Usage
 
-> **Note**
+> [!NOTE]
 > 
 > Before proceeding, update Foundry:
 > 
