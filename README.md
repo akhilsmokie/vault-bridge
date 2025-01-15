@@ -1,40 +1,57 @@
 # Yield Exposed Token
 
-### Stake the Bridge using Vaults and LxLy
+Yield Exposed Token is the core of the Stake The Bridge (STB) system. Built from the ground up to be reusable, it offers complete STB functionality out of the box, allowing you to create new yeTokens in just a few lines of code.
 
-A Yield Exposed Token (yeToken) is an  
-ERC4626 wrapper and LxLy bridge extension  
-enabling the simultaneous depositing and bridging of widely used tokens like WETH, USDC, USDT, DAI, etc.
+## Stake The Bridge
+
+The STB system is comprised of:
+
+- Layer X
+  - [Yield Exposed Token](src/YieldExposedToken.sol)
+  - [Migration Manager](src/MigrationManager.sol)
+- Layer Y
+  - [Native Converter](src/NativeConverter.sol)
+
+A Yield Exposed Token (yeToken) is an
+
+- [ERC-20](https://eips.ethereum.org/EIPS/eip-20) token
+- [ERC-4626](https://eips.ethereum.org/EIPS/eip-4626) vault
+- [LxLy Bridge](https://github.com/0xPolygonHermez/zkevm-contracts) extension
+
+enabling deposits and bridging of assets such as WETH, USDC, USDT, and DAI, while producing yield.
+
+For more information, see the NatSpec documentation.
 
 ## Usage
 
-**Install**
+**Prerequisite**
 
-Be sure to update foundry:
-```shell
+```
 foundryup
 ```
-Then
-```shell
+
+**Install**
+
+```
 forge soldeer install & bun install
 ```
 
 **Build**
 
-```shell
+```
 forge build
 ```
 
 **Test**
 
-```shell
+```
 forge test
 ```
 
-Coverage with:
-```shell
-forge coverage --ir-minimum --report lcov
-genhtml -o coverage lcov.info
+**Coverage**
+
+```
+forge coverage --ir-minimum --report lcov && genhtml -o coverage lcov.info
 ```
 
 ## License
@@ -50,4 +67,4 @@ Unless you explicitly state otherwise, any contribution intentionally submitted 
 
 ---
 
-© 2025 Polygon Labs
+© 2025 PT Services DMCC

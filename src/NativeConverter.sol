@@ -58,7 +58,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
 
     /// @param originalUnderlyingTokenDecimals_ The number of decimals of the original underlying token on Layer X. The `customToken` and `underlyingToken` must have the same number of decimals as the original underlying token.
     /// @param customToken_ The token custom mapped to the custom token on LxLy Bridge on Layer Y.
-    /// @param underlyingToken_ The token that represents the original underlying token on Layer Y.
+    /// @param underlyingToken_ The token that represents the original underlying token on Layer Y. Important: This token MUST be either the bridge-wrapped version of the original underlying token, or the original underlying token must be custom mapped to this token on LxLy Bridge on Layer Y.
     /// @param nonMigratableBackingPercentage_ The percentage of the total custom token minted by Native Converter on Layer Y for which backing cannot be migrated to Layer X; 1 is 1%. The limit does not apply to the owner.
     /// @param migrationManager_ The address of Migration Manager on Layer X.
     function __NativeConverter_init(
@@ -79,14 +79,25 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         require(lxlyBridge_ != address(0), "INVALID_BRIDGE");
         require(migrationManager_ != address(0), "INVALID_MIGRATION_MANAGER");
 
-        // Check the custom token and underlying token decimals.
-        require(
-            IERC20Metadata(customToken_).decimals() == originalUnderlyingTokenDecimals_, "INVALID_CUSTOM_TOKEN_DECIMALS"
-        );
-        require(
-            IERC20Metadata(underlyingToken_).decimals() == originalUnderlyingTokenDecimals_,
-            "INVALID_UNDERLYING_TOKEN_DECIMALS"
-        );
+        // Check the custom token's decimals.
+        uint8 customTokenDecimals;
+        try IERC20Metadata(customToken_).decimals() returns (uint8 decimals) {
+            customTokenDecimals = decimals;
+        } catch {
+            // Default to 18 decimals.
+            customTokenDecimals = 18;
+        }
+        require(customTokenDecimals == originalUnderlyingTokenDecimals_, "INVALID_CUSTOM_TOKEN_DECIMALS");
+
+        // Check the underlying token's decimals.
+        uint8 underlyingTokenDecimals;
+        try IERC20Metadata(underlyingToken_).decimals() returns (uint8 decimals_) {
+            underlyingTokenDecimals = decimals_;
+        } catch {
+            // Default to 18 decimals.
+            underlyingTokenDecimals = 18;
+        }
+        require(underlyingTokenDecimals == originalUnderlyingTokenDecimals_, "INVALID_UNDERLYING_TOKEN_DECIMALS");
 
         // Initialize the inherited contracts.
         __Ownable_init(owner_);
@@ -253,7 +264,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
     /// @notice Burn a specific amount of the custom token and unlock a respective amount of the underlying token.
     function deconvert(uint256 shares, address receiver) external whenNotPaused returns (uint256 assets) {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
-        return deconvertAndBridge(shares, $.lxlyId, receiver, false);
+        return _deconvert(shares, $.lxlyId, receiver, false);
     }
 
     /// @notice Burn a specific amount of the custom token and unlock a respective amount of the underlying token, and bridge it to another network.
@@ -265,7 +276,23 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
     ) public whenNotPaused returns (uint256 assets) {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
 
+        // Check the input.
+        require(destinationNetworkId != $.lxlyId, "INVALID_NETWORK");
+
+        return _deconvert(shares, destinationNetworkId, destinationAddress, forceUpdateGlobalExitRoot);
+    }
+
+    /// @notice Burn a specific amount of the custom token and unlock a respective amount of the underlying token, and optionally bridge it to another network.
+    function _deconvert(
+        uint256 shares,
+        uint32 destinationNetworkId,
+        address destinationAddress,
+        bool forceUpdateGlobalExitRoot
+    ) public whenNotPaused returns (uint256 assets) {
+        NativeConverterStorage storage $ = _getNativeConverterStorage();
+
         // Check the inputs.
+        require(destinationNetworkId != $.lxlyId, "INVALID_NETWORK");
         require(assets > 0, "INVALID_AMOUNT");
         require(destinationAddress != address(0), "INVALID_ADDRESS");
 
