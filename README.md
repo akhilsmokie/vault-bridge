@@ -1,20 +1,37 @@
 # Yield Exposed Token
 
-### Stake the Bridge using Vaults and LxLy
+Yield Exposed Token is the core of the STB (Stake The Bridge) system. Built from the ground up to be reusable, it offers complete STB functionality out of the box, allowing you to create new yeTokens in just a few lines of code.
 
-A Yield Exposed Token (yeToken) is an  
-ERC4626 wrapper and LxLy bridge extension  
-enabling the simultaneous depositing and bridging of widely used tokens like WETH, USDC, USDT, DAI, etc.
+### Stake The Bridge
+
+The Stake The Bridge system is comprised of:
+
+- Yield Exposed Token (Layer X)
+- Native Converter (Layer Y*s*)
+- Migration Manager (Layer X)
+
+A Yield Exposed Token (yeToken) is an
+
+- ERC-20 token
+- ERC-4626 vault
+- LxLy Bridge extension
+
+enabling simultaneous depositing and bridging of widely used tokens, such as WETH, USDC, USDT, and DAI.
+
+For more information, see the NatSpec.
 
 ## Usage
 
+> **Note**
+> 
+> Before proceeding, update Foundry:
+> 
+> ```shell
+> foundryup
+> ```
+
 **Install**
 
-Be sure to update foundry:
-```shell
-foundryup
-```
-Then
 ```shell
 forge soldeer install & bun install
 ```
@@ -31,10 +48,10 @@ forge build
 forge test
 ```
 
-Coverage with:
+**Coverage**
+
 ```shell
-forge coverage --ir-minimum --report lcov
-genhtml -o coverage lcov.info
+forge coverage --ir-minimum --report lcov && genhtml -o coverage lcov.info
 ```
 
 ## License
@@ -50,4 +67,4 @@ Unless you explicitly state otherwise, any contribution intentionally submitted 
 
 ---
 
-© 2025 Polygon Labs
+© 2025 PT Services DMCC
