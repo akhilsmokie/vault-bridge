@@ -354,14 +354,17 @@ contract YieldExposedTokenTest is Test {
         vm.expectEmit();
         emit Deposit(sender, recipient, amount, amount);
         yeUSDC.deposit(amount, recipient);
-
         vm.stopPrank();
-        uint256 reserveAmount = (amount * MINIMUM_RESERVE_PERCENTAGE) / 100;
-        assertEq(IERC20(USDC).balanceOf(address(yeUSDC)), reserveAmount);
+
+        uint256 reserveAssets = (amount * MINIMUM_RESERVE_PERCENTAGE) / 100;
+        uint256 stakedShares = usdcVault.convertToShares(amount - reserveAssets);
+        uint256 stakedAssets = usdcVault.convertToAssets(stakedShares);
+
+        assertEq(IERC20(USDC).balanceOf(address(yeUSDC)), reserveAssets);
         assertEq(yeUSDC.balanceOf(recipient), amount); // shares minted to the recipient
-        assertEq(yeUSDC.reservedAssets(), reserveAmount);
-        assertEq(yeUSDC.stakedAssets(), amount - reserveAmount - 1); // minus 1 because of rounding
-        assertEq(yeUSDC.totalAssets(), amount - 1); // minus 1 because of rounding
+        assertEq(yeUSDC.reservedAssets(), reserveAssets);
+        assertEq(yeUSDC.stakedAssets(), stakedAssets);
+        assertEq(yeUSDC.totalAssets(), reserveAssets + stakedAssets);
     }
 
     function test_depositWithPermit() public {
@@ -394,12 +397,15 @@ contract YieldExposedTokenTest is Test {
         yeUSDC.depositWithPermit(amount, recipient, permitData);
         vm.stopPrank();
 
-        uint256 reserveAmount = (amount * MINIMUM_RESERVE_PERCENTAGE) / 100;
-        assertEq(IERC20(USDC).balanceOf(address(yeUSDC)), reserveAmount);
+        uint256 reserveAssets = (amount * MINIMUM_RESERVE_PERCENTAGE) / 100;
+        uint256 stakedShares = usdcVault.convertToShares(amount - reserveAssets);
+        uint256 stakedAssets = usdcVault.convertToAssets(stakedShares);
+
+        assertEq(IERC20(USDC).balanceOf(address(yeUSDC)), reserveAssets);
         assertEq(yeUSDC.balanceOf(recipient), amount); // shares minted to the recipient
-        assertEq(yeUSDC.reservedAssets(), reserveAmount);
-        assertEq(yeUSDC.stakedAssets(), amount - reserveAmount - 1); // minus 1 because of rounding
-        assertEq(yeUSDC.totalAssets(), amount - 1); // minus 1 because of rounding
+        assertEq(yeUSDC.reservedAssets(), reserveAssets);
+        assertEq(yeUSDC.stakedAssets(), stakedAssets);
+        assertEq(yeUSDC.totalAssets(), reserveAssets + stakedAssets);
     }
 
     function test_depositAndBridge() public {
@@ -419,17 +425,27 @@ contract YieldExposedTokenTest is Test {
         IERC20(USDC).approve(address(yeUSDC), amount);
         vm.expectEmit();
         emit BridgeEvent(
-            LEAF_TYPE_ASSET, NETWORK_ID_L1, address(yeUSDC), NETWORK_ID_L2, recipient, amount, yeUSDCMetaData, 214030
+            LEAF_TYPE_ASSET,
+            NETWORK_ID_L1,
+            address(yeUSDC),
+            NETWORK_ID_L2,
+            recipient,
+            amount,
+            yeUSDCMetaData,
+            ILxLyBridge(LXLY_BRIDGE).depositCount()
         );
         yeUSDC.depositAndBridge(amount, recipient, NETWORK_ID_L2, true);
-
         vm.stopPrank();
-        uint256 reserveAmount = (amount * MINIMUM_RESERVE_PERCENTAGE) / 100;
-        assertEq(IERC20(USDC).balanceOf(address(yeUSDC)), reserveAmount);
-        assertEq(yeUSDC.balanceOf(LXLY_BRIDGE), amount); // shares locked in bridge
-        assertEq(yeUSDC.reservedAssets(), reserveAmount);
-        assertEq(yeUSDC.stakedAssets(), amount - reserveAmount - 1);
-        assertEq(yeUSDC.totalAssets(), amount - 1);
+
+        uint256 reserveAssets = (amount * MINIMUM_RESERVE_PERCENTAGE) / 100;
+        uint256 stakedShares = usdcVault.convertToShares(amount - reserveAssets);
+        uint256 stakedAssets = usdcVault.convertToAssets(stakedShares);
+
+        assertEq(IERC20(USDC).balanceOf(address(yeUSDC)), reserveAssets);
+        assertEq(yeUSDC.balanceOf(LXLY_BRIDGE), amount); // shares locked on bridge
+        assertEq(yeUSDC.reservedAssets(), reserveAssets);
+        assertEq(yeUSDC.stakedAssets(), stakedAssets);
+        assertEq(yeUSDC.totalAssets(), reserveAssets + stakedAssets);
     }
 
     function test_depositAndBridgePermit() public {
@@ -459,17 +475,27 @@ contract YieldExposedTokenTest is Test {
         vm.startPrank(sender);
         vm.expectEmit();
         emit BridgeEvent(
-            LEAF_TYPE_ASSET, NETWORK_ID_L1, address(yeUSDC), NETWORK_ID_L2, recipient, amount, yeUSDCMetaData, 214030
+            LEAF_TYPE_ASSET,
+            NETWORK_ID_L1,
+            address(yeUSDC),
+            NETWORK_ID_L2,
+            recipient,
+            amount,
+            yeUSDCMetaData,
+            ILxLyBridge(LXLY_BRIDGE).depositCount()
         );
         yeUSDC.depositAndBridgeWithPermit(amount, recipient, NETWORK_ID_L2, true, permitData);
         vm.stopPrank();
 
-        uint256 reserveAmount = (amount * MINIMUM_RESERVE_PERCENTAGE) / 100;
-        assertEq(IERC20(USDC).balanceOf(address(yeUSDC)), reserveAmount);
-        assertEq(yeUSDC.balanceOf(LXLY_BRIDGE), amount); // shares locked in bridge
-        assertEq(yeUSDC.reservedAssets(), reserveAmount);
-        assertEq(yeUSDC.stakedAssets(), amount - reserveAmount - 1);
-        assertEq(yeUSDC.totalAssets(), amount - 1);
+        uint256 reserveAssets = (amount * MINIMUM_RESERVE_PERCENTAGE) / 100;
+        uint256 stakedShares = usdcVault.convertToShares(amount - reserveAssets);
+        uint256 stakedAssets = usdcVault.convertToAssets(stakedShares);
+
+        assertEq(IERC20(USDC).balanceOf(address(yeUSDC)), reserveAssets);
+        assertEq(yeUSDC.balanceOf(LXLY_BRIDGE), amount); // shares locked on bridge
+        assertEq(yeUSDC.reservedAssets(), reserveAssets);
+        assertEq(yeUSDC.stakedAssets(), stakedAssets);
+        assertEq(yeUSDC.totalAssets(), reserveAssets + stakedAssets);
     }
 
     function test_mint() public {
@@ -490,11 +516,15 @@ contract YieldExposedTokenTest is Test {
         yeUSDC.mint(amount, sender);
         vm.stopPrank();
 
-        uint256 reserveAmount = (amount * MINIMUM_RESERVE_PERCENTAGE) / 100;
-        assertEq(yeUSDC.balanceOf(sender), amount); // shares minted to the sender
-        assertEq(yeUSDC.reservedAssets(), reserveAmount);
-        assertEq(yeUSDC.stakedAssets(), amount - reserveAmount - 1);
-        assertEq(yeUSDC.totalAssets(), amount - 1);
+        uint256 reserveAssets = (amount * MINIMUM_RESERVE_PERCENTAGE) / 100;
+        uint256 stakedShares = usdcVault.convertToShares(amount - reserveAssets);
+        uint256 stakedAssets = usdcVault.convertToAssets(stakedShares);
+
+        assertEq(IERC20(USDC).balanceOf(address(yeUSDC)), reserveAssets);
+        assertEq(yeUSDC.balanceOf(sender), amount); // shares minted to the recipient
+        assertEq(yeUSDC.reservedAssets(), reserveAssets);
+        assertEq(yeUSDC.stakedAssets(), stakedAssets);
+        assertEq(yeUSDC.totalAssets(), reserveAssets + stakedAssets);
     }
 
     function test_withdraw() public {
@@ -596,17 +626,19 @@ contract YieldExposedTokenTest is Test {
         yeUSDC.mint(amount, sender);
         vm.stopPrank();
 
-        uint256 stakedShares = 84403857686151; // 89 assets (value according to USDC vault market price)
-        uint256 yield = 89;
+        uint256 stakedShares = usdcVault.balanceOf(address(yeUSDC));
+        uint256 yieldAssets = 500;
+        uint256 yieldShares = usdcVault.convertToShares(yieldAssets);
+        uint256 expectedYield = usdcVault.convertToAssets(yieldShares);
 
-        deal(USDC_VAULT, address(yeUSDC), stakedShares * 2); // doubling the staked assets will create a yield of 89
+        deal(USDC_VAULT, address(yeUSDC), stakedShares + yieldShares);
 
         vm.expectEmit();
-        emit YieldCollected(yieldRecipient, yield);
+        emit YieldCollected(yieldRecipient, expectedYield);
         vm.prank(owner);
         yeUSDC.collectYield();
 
-        vm.assertEq(yeUSDC.balanceOf(yieldRecipient), yield);
+        vm.assertEq(yeUSDC.balanceOf(yieldRecipient), expectedYield);
     }
 
     function test_setYieldRecipient_no_yield() public {
@@ -632,22 +664,26 @@ contract YieldExposedTokenTest is Test {
         uint256 amount = 100;
 
         // generate yield
-        uint256 stakedShares = 84403857686151;
-        uint256 yield = 89;
         deal(USDC, sender, amount + TRANSFER_FEE);
         vm.startPrank(sender);
         IERC20(USDC).approve(address(yeUSDC), amount + TRANSFER_FEE);
         yeUSDC.mint(amount, sender);
         vm.stopPrank();
-        deal(USDC_VAULT, address(yeUSDC), stakedShares * 2);
+
+        uint256 stakedShares = usdcVault.balanceOf(address(yeUSDC));
+        uint256 yieldAssets = 500;
+        uint256 yieldShares = usdcVault.convertToShares(yieldAssets);
+        uint256 expectedYield = usdcVault.convertToAssets(yieldShares);
+
+        deal(USDC_VAULT, address(yeUSDC), stakedShares + yieldShares);
 
         assertEq(yeUSDC.yieldRecipient(), yieldRecipient);
 
         vm.expectEmit();
-        emit YieldCollected(yieldRecipient, yield);
+        emit YieldCollected(yieldRecipient, expectedYield);
         vm.prank(owner);
         yeUSDC.setYieldRecipient(newRecipient);
-        assertEq(yeUSDC.balanceOf(yieldRecipient), yield); // yield collected to the old recipient
+        assertEq(yeUSDC.balanceOf(yieldRecipient), expectedYield); // yield collected to the old recipient
         assertEq(yeUSDC.yieldRecipient(), newRecipient);
     }
 
@@ -700,25 +736,34 @@ contract YieldExposedTokenTest is Test {
 
     function test_redeem() public {
         uint256 initialAmount = 100;
-        uint256 redeemAmount = 99; // 1 lost due to rounding
 
         vm.startPrank(owner);
         yeUSDC.pause();
         vm.expectRevert(EnforcedPause.selector);
-        yeUSDC.redeem(redeemAmount, sender, sender);
+        yeUSDC.redeem(initialAmount, sender, sender);
         yeUSDC.unpause();
         vm.stopPrank();
 
         deal(USDC, sender, initialAmount);
 
+        // create reserve of 10 assets and 89 staked assets
         vm.startPrank(sender);
         IERC20(USDC).approve(address(yeUSDC), initialAmount);
         yeUSDC.deposit(initialAmount, sender);
         assertEq(IERC20(USDC).balanceOf(sender), 0);
         assertEq(yeUSDC.balanceOf(sender), initialAmount);
 
+        vm.expectRevert("AMOUNT_TOO_LARGE");
+        yeUSDC.redeem(1000, sender, sender); // redeem amount is greater than total assets (100)
+
+        vm.expectRevert("INVALID_AMOUNT");
+        yeUSDC.redeem(0, sender, sender);
+
+        uint256 redeemAmount = yeUSDC.totalAssets();
+
         yeUSDC.redeem(redeemAmount, sender, sender); // redeem from both staked and reserved assets
         assertEq(IERC20(USDC).balanceOf(sender), redeemAmount);
+        vm.stopPrank();
     }
 
     function test_completeMigration_no_discrepancy() public {
@@ -749,7 +794,14 @@ contract YieldExposedTokenTest is Test {
 
         vm.expectEmit();
         emit BridgeEvent(
-            LEAF_TYPE_ASSET, NETWORK_ID_L1, address(yeUSDC), NETWORK_ID_L2, address(0), shares, yeUSDCMetaData, 214030
+            LEAF_TYPE_ASSET,
+            NETWORK_ID_L1,
+            address(yeUSDC),
+            NETWORK_ID_L2,
+            address(0),
+            shares,
+            yeUSDCMetaData,
+            ILxLyBridge(LXLY_BRIDGE).depositCount()
         );
         vm.expectEmit();
         emit Deposit(migrationManager, address(yeUSDC), assets, shares);
@@ -783,7 +835,14 @@ contract YieldExposedTokenTest is Test {
 
         vm.expectEmit();
         emit BridgeEvent(
-            LEAF_TYPE_ASSET, NETWORK_ID_L1, address(yeUSDC), NETWORK_ID_L2, address(0), shares, yeUSDCMetaData, 214030
+            LEAF_TYPE_ASSET,
+            NETWORK_ID_L1,
+            address(yeUSDC),
+            NETWORK_ID_L2,
+            address(0),
+            shares,
+            yeUSDCMetaData,
+            ILxLyBridge(LXLY_BRIDGE).depositCount()
         );
         vm.expectEmit();
         emit Deposit(migrationManager, address(yeUSDC), assets, shares);
@@ -855,7 +914,7 @@ contract YieldExposedTokenTest is Test {
         yeUSDC.deposit(amount, sender);
         vm.stopPrank();
 
-        assertEq(yeUSDC.maxWithdraw(sender), amount - 1); // 1 lost due to rounding
+        assertEq(yeUSDC.maxWithdraw(sender), yeUSDC.totalAssets());
     }
 
     function test_previewWithdraw() public {
@@ -901,7 +960,7 @@ contract YieldExposedTokenTest is Test {
         yeUSDC.deposit(amount, sender);
         vm.stopPrank();
 
-        assertEq(yeUSDC.maxRedeem(sender), amount - 1); // 1 lost due to rounding
+        assertEq(yeUSDC.maxRedeem(sender), yeUSDC.totalAssets());
     }
 
     function test_previewRedeem() public {
