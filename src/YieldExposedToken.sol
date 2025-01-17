@@ -289,8 +289,6 @@ abstract contract YieldExposedToken is
         require(destinationAddress != address(0), "INVALID_ADDRESS");
 
         // Transfer the underlying token from the sender to itself.
-        // @note This was mainly added to accomodate yeETH and potential other usecases.
-        // @note when sending ETH, it is converted to WETH, after which a transferFrom would be unnecessary.
         assets = _receiveUnderlyingToken(msg.sender, assets);
 
         // Check for a refund.
@@ -322,18 +320,20 @@ abstract contract YieldExposedToken is
 
         // Mint yeToken.
         if (destinationNetworkId != $.lxlyId) {
-            // Mint to self and bridge to the receiver.
+            // Mint to self.
             _mint(address(this), shares);
+
+            //  Bridge to the receiver.
             lxlyBridge().bridgeAsset(
                 destinationNetworkId, destinationAddress, shares, address(this), forceUpdateGlobalExitRoot, ""
             );
+
+            // Update the receiver.
+            destinationAddress = address(this);
         } else {
             // Mint to the receiver.
             _mint(destinationAddress, shares);
         }
-
-        // Update the receiver.
-        if (destinationNetworkId != $.lxlyId) destinationAddress = address(this);
 
         // Emit the ERC-4626 event.
         emit IERC4626.Deposit(msg.sender, destinationAddress, assets, shares);
@@ -375,10 +375,6 @@ abstract contract YieldExposedToken is
     /// @notice Mint a specific amount of yeToken by depositing a required amount of the underlying token.
     function mint(uint256 shares, address receiver) external override whenNotPaused returns (uint256 assets) {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
-
-        // Check the input.
-        require(shares > 0, "INVALID_AMOUNT");
-        // The receiver is checked in the `_deposit` function.
 
         // Mint yeToken to the receiver.
         uint256 mintedShares;
@@ -574,7 +570,13 @@ abstract contract YieldExposedToken is
     // -----================= ::: ERC-20 ::: =================-----
 
     /// @dev Pausable ERC-20 `transfer` function.
-    function transfer(address to, uint256 value) public virtual override(ERC20Upgradeable, IERC20) returns (bool) {
+    function transfer(address to, uint256 value)
+        public
+        virtual
+        override(ERC20Upgradeable, IERC20)
+        whenNotPaused
+        returns (bool)
+    {
         return ERC20Upgradeable.transfer(to, value);
     }
 
@@ -637,14 +639,20 @@ abstract contract YieldExposedToken is
     }
 
     /// @notice The amount of yield available for collection.
-    /// @dev Do not forget to subtract any assets held temporarily by the contract after using this function.
-    function yield() public view returns (uint256) {
+    /// @notice For informational purposes only.
+    function yield() external view returns (uint256) {
+        return _yield(0);
+    }
+
+    /// @notice The amount of yield available for collection.
+    /// @param temporaryAssets Accounts for any assets held temporarily by the contract (such as those received from the sender).
+    function _yield(uint256 temporaryAssets) internal view returns (uint256) {
         // The formula for calculating yield is:
         // yield = assets reported by yield vault + reserve - yeToken total supply in assets
         (bool positive, uint256 difference) = backingDifference();
 
         // Returns zero if the backing is negative.
-        return positive ? difference : 0;
+        return positive ? difference - temporaryAssets : 0;
     }
 
     /// @notice The difference between the total assets and the minimum assets required to back the total supply of yeToken.
@@ -732,7 +740,7 @@ abstract contract YieldExposedToken is
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
 
         // Calculate the yield.
-        uint256 yield_ = yield();
+        uint256 yield_ = _yield(0);
 
         if (yield_ > 0) {
             // Mint yeToken to the yield recipient.
@@ -750,15 +758,15 @@ abstract contract YieldExposedToken is
 
     /// @notice Completes migration of backing in the underlying token from a Layer Y to Layer X by minting and locking up the required amount of yeToken in LxLy Bridge.
     /// @notice This function can be called by the Migration Manager only.
-    /// @param destinationNetworkId The LxLy ID of Layer Y the backing is being migrated from.
+    /// @param originNetworkId The LxLy ID of Layer Y the backing is being migrated from.
     /// @param shares The required amount of yeToken to mint and lock up in LxLy Bridge. Yield may be utilized to offset transfer fees of the underlying token.
     /// @param assets The amount of the underlying token to transfer from Migration Manager to self.
-    function completeMigration(uint32 destinationNetworkId, uint256 shares, uint256 assets) external whenNotPaused {
+    function completeMigration(uint32 originNetworkId, uint256 shares, uint256 assets) external whenNotPaused {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
 
         // Check the inputs.
         require(msg.sender == $.migrationManager, "UNAUTHORIZED");
-        require(destinationNetworkId != $.lxlyId, "INVALID_NETWORK_ID");
+        require(originNetworkId != $.lxlyId, "INVALID_NETWORK_ID");
         require(shares > 0, "INVALID_AMOUNT");
 
         // Transfer the underlying token from the sender to itself.
@@ -769,10 +777,8 @@ abstract contract YieldExposedToken is
         // This ensures that the amount of yeToken locked up in LxLy Bridge on Layer X matches the supply of the custom token on Layer Ys.
         uint256 sharesInAssets = convertToAssets(shares);
         uint256 discrepancy = sharesInAssets - assets;
-        uint256 yield_ = yield();
-        if (discrepancy > 0) {
-            require(yield_ >= assets && discrepancy <= yield_ - assets, "INSUFFICIENT_YIELD_TO_COVER_FOR_DISCREPANCY");
-        }
+        uint256 yield_ = _yield(assets);
+        if (discrepancy > 0) require(yield_ >= discrepancy, "INSUFFICIENT_YIELD_TO_COVER_FOR_DISCREPANCY");
 
         // Calculate the amount to reserve and the amount to deposit into the yield vault.
         // @note Check rounding.
@@ -788,16 +794,16 @@ abstract contract YieldExposedToken is
             $.yieldVault.deposit(assetsToDeposit, address(this));
         }
 
-        // Mint yeToken to self and bridge it to address zero on the destination network.
-        // The yeToken will not be claimable on the destination network, but provides liquidity for bridging from Layer Ys to Layer X.
+        // Mint yeToken to self and bridge it to address zero on the origin network.
+        // The yeToken will not be claimable on the origin network, but provides liquidity for bridging from Layer Ys to Layer X.
         _mint(address(this), shares);
-        lxlyBridge().bridgeAsset(destinationNetworkId, address(0), shares, address(this), true, "");
+        lxlyBridge().bridgeAsset(originNetworkId, address(0), shares, address(this), true, "");
 
         // Emit the ERC-4626 event.
         emit IERC4626.Deposit(msg.sender, address(this), assets, shares);
 
         // Emit the event.
-        emit MigrationCompleted(destinationNetworkId, shares, discrepancy);
+        emit MigrationCompleted(originNetworkId, shares, discrepancy);
     }
 
     /// @notice Sets the yield recipient.
