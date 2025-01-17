@@ -772,6 +772,10 @@ abstract contract YieldExposedToken is
     function completeMigration(uint32 originNetworkId, uint256 shares, uint256 assets) external whenNotPaused {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
 
+        // Modify the input.
+        // Accounts for a transfer fee when the `assets` were claimed from LxLy Bridge.
+        assets = _assetsAfterTransferFee(assets);
+
         // Check the inputs.
         require(msg.sender == $.migrationManager, "UNAUTHORIZED");
         require(originNetworkId != $.lxlyId, "INVALID_NETWORK_ID");

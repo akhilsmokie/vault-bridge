@@ -131,7 +131,7 @@ abstract contract MigrationManager is Initializable, OwnableUpgradeable, Pausabl
             (uint256 shares, uint256 assets) = abi.decode(instructionData, (uint256, uint256));
 
             // Complete the migration.
-            $.yeToken.completeMigration(originNetwork, shares, _assetsAfterTransferFee(assets));
+            $.yeToken.completeMigration(originNetwork, shares, assets);
         } else {
             revert("INVALID_CROSS_NETWORK_INSTRUCTION");
         }
@@ -157,18 +157,6 @@ abstract contract MigrationManager is Initializable, OwnableUpgradeable, Pausabl
     function version() external pure virtual returns (string memory) {
         return "1.0.0";
     }
-
-    // -----================= ::: DEV ::: =================-----
-
-    /// @notice Accounts for the transfer fee of the underlying token.
-    /// @dev You must implement the same behavior as that of the underlying token for calculating the transfer fee.
-    /// @dev If the underlying token does not have a transfer fee, the output must equal the input.
-    /// @dev This function is used for estimation purposes only.
-    /// @dev Example:
-    /// @dev Fee: 2% flat
-    /// @dev Input: `100`
-    /// @dev Output: `98`
-    function _assetsAfterTransferFee(uint256 assetsBeforeTransferFee) internal view virtual returns (uint256);
 }
 
 // @todo @notes.
