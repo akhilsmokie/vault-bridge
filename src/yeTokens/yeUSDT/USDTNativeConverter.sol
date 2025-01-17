@@ -5,5 +5,5 @@ import {GenericNativeConverter} from "../GenericNativeConverter.sol";
 
 /// @title USDT Native Converter
 /// @dev No customization is required.
-/// @dev This contract does not need to be deployed. You can point USDTNativeConverter proxy to GenericNativeConverter instead.
+/// @dev This contract does not need to be deployed. You can point `USDTNativeConverter` proxy to `GenericNativeConverter` instead.
 contract USDTNativeConverter is GenericNativeConverter {}

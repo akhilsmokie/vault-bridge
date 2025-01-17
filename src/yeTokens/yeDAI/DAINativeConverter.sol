@@ -5,5 +5,5 @@ import {GenericNativeConverter} from "../GenericNativeConverter.sol";
 
 /// @title DAI Native Converter
 /// @dev No customization is required.
-/// @dev This contract does not need to be deployed. You can point DAINativeConverter proxy to GenericNativeConverter instead.
+/// @dev This contract does not need to be deployed. You can point `DAINativeConverter` proxy to `GenericNativeConverter` instead.
 contract DAINativeConverter is GenericNativeConverter {}
