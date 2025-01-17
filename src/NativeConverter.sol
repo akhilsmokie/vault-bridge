@@ -133,7 +133,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
     }
 
     /// @notice The amount of the underlying token that backs the custom token minted by Native Converter on Layer Y that has not been migrated to Layer X.
-    /// @dev The amount is used in accounting and may be different from Native Converter's underlying token balance. You may do as you wish with surplus underlying token balance, but you MUST NOT designate it as the backing.
+    /// @dev The amount is used in accounting and may be different from Native Converter's underlying token balance. You may do as you wish with surplus underlying token balance, but you MUST NOT designate it as backing.
     function backingOnLayerY() public view returns (uint256) {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
         return $.backingOnLayerY;
