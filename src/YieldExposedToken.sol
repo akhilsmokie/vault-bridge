@@ -189,6 +189,7 @@ abstract contract YieldExposedToken is
 
     /// @notice The total backing of yeToken in the underlying token.
     /// @notice May be less that the actual amount if backing in Native Converter on Layer Ys hasn't been migrated to Layer X yet.
+    /// @dev Does not account for any assets held temporarily by the contract (such as those received from the sender).
     function totalAssets() public view returns (uint256 totalManagedAssets) {
         return stakedAssets() + reservedAssets();
     }
@@ -622,6 +623,7 @@ abstract contract YieldExposedToken is
 
     /// @notice Yield exposed tokens have an internal reserve of the underlying token from which withdrawals are served first.
     /// @notice The reserve can be refilled by calling `replenishReserve` when it is below the `minimumReservePercentage`.
+    /// @dev Does not account for any assets held temporarily by the contract (such as those received from the sender).
     function reservedAssets() public view returns (uint256) {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
         return $.underlyingToken.balanceOf(address(this));
@@ -639,27 +641,33 @@ abstract contract YieldExposedToken is
     }
 
     /// @notice The amount of yield available for collection.
-    /// @notice For informational purposes only.
+    /// @notice For information purposes only.
     function yield() external view returns (uint256) {
         return _yield(0);
     }
 
     /// @notice The amount of yield available for collection.
-    /// @param temporaryAssets Accounts for any assets held temporarily by the contract (such as those received from the sender).
+    /// @param temporaryAssets Accounts for assets held temporarily by the contract (such as those received from the sender).
     function _yield(uint256 temporaryAssets) internal view returns (uint256) {
         // The formula for calculating yield is:
-        // yield = assets reported by yield vault + reserve - yeToken total supply in assets
-        (bool positive, uint256 difference) = backingDifference();
+        // yield = assets reported by yield vault + reserve - any temporary assets - yeToken total supply in assets
+        (bool positive, uint256 difference) = _backingDifference(temporaryAssets);
 
         // Returns zero if the backing is negative.
-        return positive ? difference - temporaryAssets : 0;
+        return positive ? difference : 0;
     }
 
     /// @notice The difference between the total assets and the minimum assets required to back the total supply of yeToken.
-    /// @dev Does not account for any assets held temporarily by the contract.
-    function backingDifference() public view returns (bool positive, uint256 difference) {
+    /// @notice For information purposes only.
+    function backingDifference() external view returns (bool positive, uint256 difference) {
+        return _backingDifference(0);
+    }
+
+    /// @notice The difference between the total assets and the minimum assets required to back the total supply of yeToken.
+    /// @param temporaryAssets Accounts for assets held temporarily by the contract (such as those received from the sender).
+    function _backingDifference(uint256 temporaryAssets) internal view returns (bool positive, uint256 difference) {
         // Get the state.
-        uint256 totalAssets_ = totalAssets();
+        uint256 totalAssets_ = totalAssets() - temporaryAssets;
         uint256 minimumAssets = convertToAssets(totalSupply());
 
         // Calculate the difference.
