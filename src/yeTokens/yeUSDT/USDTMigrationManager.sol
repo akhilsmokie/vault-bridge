@@ -1,32 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity 0.8.28;
 
-import {MigrationManager} from "../../MigrationManager.sol";
-import {USDTTransferFeeCalculator} from "./USDTTransferFeeCalculator.sol";
+import {GenericMigrationManager} from "../GenericMigrationManager.sol";
 
 /// @title USDT Native Converter
-contract USDTMigrationManager is MigrationManager, USDTTransferFeeCalculator {
-    constructor() {
-        _disableInitializers();
-    }
-
-    function initialize(address owner_, address yeToken_, address nativeConverter_) external initializer {
-        // Initialize the base implementation.
-        __MigrationManager_init(owner_, yeToken_, nativeConverter_);
-
-        // Initialize the inherited module.
-        __USDTTransferFeeCalculator_init(address(underlyingToken()), address(yeToken()));
-    }
-
-    // -----================= ::: DEV ::: =================-----
-
-    function _assetsAfterTransferFee(uint256 assetsBeforeTransferFee)
-        internal
-        view
-        virtual
-        override(MigrationManager, USDTTransferFeeCalculator)
-        returns (uint256)
-    {
-        return USDTTransferFeeCalculator._assetsAfterTransferFee(assetsBeforeTransferFee);
-    }
-}
+/// @dev No customization is required.
+/// @dev This contract does not need to be deployed. You can point `USDTMigrationManager` proxy to `GenericMigrationManager` instead.
+contract USDTMigrationManager is GenericMigrationManager {}

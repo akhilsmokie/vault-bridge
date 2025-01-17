@@ -2,10 +2,25 @@
 pragma solidity 0.8.28;
 
 import {YieldExposedToken} from "../../YieldExposedToken.sol";
-import {USDTTransferFeeCalculator} from "./USDTTransferFeeCalculator.sol";
 
 /// @title Yield Exposed USDT
-contract YeUSDT is YieldExposedToken, USDTTransferFeeCalculator {
+contract YeUSDT is YieldExposedToken {
+    /**
+     * @dev Storage of the Yield Exposed USDT contract.
+     * @dev It's implemented on a custom ERC-7201 namespace to reduce the risk of storage collisions when using with upgradeable contracts.
+     * @custom:storage-location erc7201:0xpolygon.storage.YeUSDT
+     */
+    struct YeUSDTStorage {
+        uint256 cachedBasisPointsRate;
+        uint256 cachedMaximumFee;
+    }
+
+    /// @dev The storage slot at which Yield Exposed USDT storage starts, following the EIP-7201 standard.
+    /// @dev Calculated as `keccak256(abi.encode(uint256(keccak256("0xpolygon.storage.YeUSDT")) - 1)) & ~bytes32(uint256(0xff))`.
+    bytes32 private constant _YEUSDT_STORAGE = 0x8ee293a165ac3d78d3724b0faed67bcdb8e52fa45b6e98021a6acfdf2696c100;
+
+    event USDTTransferFeeParametersRecached(uint256 cachedBasisPointsRate, uint256 cachedMaximumFee);
+
     constructor() {
         _disableInitializers();
     }
@@ -34,29 +49,119 @@ contract YeUSDT is YieldExposedToken, USDTTransferFeeCalculator {
             migrationManager_
         );
 
-        // Initialize the inherited module.
-        __USDTTransferFeeCalculator_init(underlyingToken_, migrationManager_);
+        // Cache the USDT transfer fee parameters.
+        recacheUsdtTransferFeeParameters();
     }
 
-    // -----================= ::: DEV ::: =================-----
+    // -----================= ::: STORAGE ::: =================-----
 
+    /// @notice The cached basis points rate.
+    /// @dev USDT emits an event when the transfer fee changes. Make sure to recache the parameters when that happens.
+    function cachedBasisPointsRate() public view returns (uint256) {
+        YeUSDTStorage storage $ = _getYeUSDTStorage();
+        return $.cachedBasisPointsRate;
+    }
+
+    /// @notice The cached maximum fee.
+    /// @dev USDT emits an event when the transfer fee changes. Make sure to recache the parameters when that happens.
+    function cachedMaximumFee() public view returns (uint256) {
+        YeUSDTStorage storage $ = _getYeUSDTStorage();
+        return $.cachedMaximumFee;
+    }
+
+    /**
+     * @dev Returns a pointer to the ERC-7201 storage namespace.
+     */
+    function _getYeUSDTStorage() private pure returns (YeUSDTStorage storage $) {
+        assembly {
+            $.slot := _YEUSDT_STORAGE
+        }
+    }
+
+    // -----================= ::: YEUSDT ::: =================-----
+
+    /// @notice Recache the USDT transfer fee parameters.
+    /// @notice Recaches the parameters on both yeUSDT and USDT Migration Manager.
+    function recacheUsdtTransferFeeParameters() public {
+        YeUSDTStorage storage $ = _getYeUSDTStorage();
+
+        // Recache the parameters on this contract.
+        IUSDT usdt = IUSDT(asset());
+        $.cachedBasisPointsRate = usdt.basisPointsRate();
+        $.cachedMaximumFee = usdt.maximumFee();
+
+        // Emit the event.
+        emit USDTTransferFeeParametersRecached($.cachedBasisPointsRate, $.cachedMaximumFee);
+    }
+
+    // @note Review and document.
+    /// @dev USDT has a transfer fee.
     function _assetsAfterTransferFee(uint256 assetsBeforeTransferFee)
         internal
         view
         virtual
-        override(YieldExposedToken, USDTTransferFeeCalculator)
+        override
         returns (uint256)
     {
-        return USDTTransferFeeCalculator._assetsAfterTransferFee(assetsBeforeTransferFee);
+        YeUSDTStorage storage $ = _getYeUSDTStorage();
+
+        if ($.cachedBasisPointsRate == 0) {
+            return assetsBeforeTransferFee;
+        }
+
+        uint256 fee = (assetsBeforeTransferFee * $.cachedBasisPointsRate) / 10000;
+        if (fee > $.cachedMaximumFee) {
+            fee = $.cachedMaximumFee;
+        }
+
+        return assetsBeforeTransferFee - fee;
     }
 
+    // @note Review and document.
+    /// @dev USDT has a transfer fee.
     function _assetsBeforeTransferFee(uint256 minimumAssetsAfterTransferFee)
         internal
         view
         virtual
-        override(YieldExposedToken, USDTTransferFeeCalculator)
+        override
         returns (uint256)
     {
-        return USDTTransferFeeCalculator._assetsBeforeTransferFee(minimumAssetsAfterTransferFee);
+        YeUSDTStorage storage $ = _getYeUSDTStorage();
+
+        if ($.cachedBasisPointsRate == 0) {
+            return minimumAssetsAfterTransferFee;
+        }
+
+        uint256 denom = 10000 - $.cachedBasisPointsRate;
+        uint256 candidate = (minimumAssetsAfterTransferFee * 10000 + (denom - 1)) / denom;
+
+        uint256 feeCandidate = (candidate * $.cachedBasisPointsRate) / 10000;
+        if (feeCandidate > $.cachedMaximumFee) {
+            return minimumAssetsAfterTransferFee + $.cachedMaximumFee;
+        }
+
+        while (candidate > 0) {
+            uint256 feeCandidateMinus1 = ((candidate - 1) * $.cachedBasisPointsRate) / 10000;
+            if (feeCandidateMinus1 > $.cachedMaximumFee) {
+                feeCandidateMinus1 = $.cachedMaximumFee;
+            }
+
+            uint256 afterFeeMinus1 = (candidate - 1) - feeCandidateMinus1;
+            if (afterFeeMinus1 >= minimumAssetsAfterTransferFee) {
+                candidate--;
+            } else {
+                break;
+            }
+        }
+
+        return candidate;
     }
 }
+
+/// @notice The interface of the USDT token.
+interface IUSDT {
+    function basisPointsRate() external view returns (uint256);
+    function maximumFee() external view returns (uint256);
+}
+
+// @todo @notes.

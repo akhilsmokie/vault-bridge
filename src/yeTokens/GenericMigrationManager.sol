@@ -14,15 +14,4 @@ abstract contract GenericMigrationManager is MigrationManager {
         // Initialize the base implementation.
         __MigrationManager_init(owner_, yeToken_, nativeConverter_);
     }
-
-    /// @dev The underlying token does not have a transfer fee.
-    function _assetsAfterTransferFee(uint256 assetsBeforeTransferFee)
-        internal
-        view
-        virtual
-        override
-        returns (uint256)
-    {
-        return assetsBeforeTransferFee;
-    }
 }
