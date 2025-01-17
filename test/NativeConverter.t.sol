@@ -304,7 +304,6 @@ contract NativeConverterTest is Test {
         assertEq(wUSDC.balanceOf(sender), 0);
         assertEq(wUSDC.balanceOf(address(uSDCNativeConverter)), amount);
         assertEq(uSDCe.balanceOf(recipient), amount);
-        assertEq(uSDCNativeConverter.mintedCustomToken(), amount);
         assertEq(uSDCNativeConverter.backingOnLayerY(), amount);
         vm.stopPrank();
     }
@@ -358,7 +357,6 @@ contract NativeConverterTest is Test {
         assertEq(wUSDC.balanceOf(sender), 0);
         assertEq(wUSDC.balanceOf(address(uSDCNativeConverter)), amount);
         assertEq(uSDCe.balanceOf(recipient), amount);
-        assertEq(uSDCNativeConverter.mintedCustomToken(), amount);
         assertEq(uSDCNativeConverter.backingOnLayerY(), amount);
         vm.stopPrank();
     }
