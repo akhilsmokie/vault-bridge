@@ -37,7 +37,6 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
     struct NativeConverterStorage {
         IERC20Plus customToken;
         IERC20 underlyingToken;
-        uint256 mintedCustomToken;
         uint256 backingOnLayerY;
         // @note Using 1 for 1%.
         uint256 nonMigratableBackingPercentage;
@@ -59,7 +58,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
     /// @param originalUnderlyingTokenDecimals_ The number of decimals of the original underlying token on Layer X. The `customToken` and `underlyingToken` must have the same number of decimals as the original underlying token.
     /// @param customToken_ The token custom mapped to the custom token on LxLy Bridge on Layer Y.
     /// @param underlyingToken_ The token that represents the original underlying token on Layer Y. Important: This token MUST be either the bridge-wrapped version of the original underlying token, or the original underlying token must be custom mapped to this token on LxLy Bridge on Layer Y.
-    /// @param nonMigratableBackingPercentage_ The percentage of the total custom token minted by Native Converter on Layer Y for which backing cannot be migrated to Layer X; 1 is 1%. The limit does not apply to the owner.
+    /// @param nonMigratableBackingPercentage_ The percentage of the total supply of the custom token on Layer Y for which backing cannot be migrated to Layer X; 1 is 1%. The limit does not apply to the owner. Accounts with large custom token balances may be able to circumvent the limit by quickly bridging to another network, migrating backing, and immediately bridging back, which would prevent others to deconvert the custom token on Layer Y.
     /// @param migrationManager_ The address of Migration Manager on Layer X.
     function __NativeConverter_init(
         address owner_,
@@ -133,13 +132,6 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         return $.underlyingToken;
     }
 
-    /// @notice The amount of the custom token minted by Native Converter on Layer Y.
-    /// @dev The amount decreases when Native Converter burns the custom token.
-    function mintedCustomToken() public view returns (uint256) {
-        NativeConverterStorage storage $ = _getNativeConverterStorage();
-        return $.mintedCustomToken;
-    }
-
     /// @notice The amount of the underlying token that backs the custom token minted by Native Converter on Layer Y that has not been migrated to Layer X.
     /// @dev The amount is used in accounting and may be different from Native Converter's underlying token balance. You may do as you wish with surplus underlying token balance, but you MUST NOT designate it as the backing.
     function backingOnLayerY() public view returns (uint256) {
@@ -147,7 +139,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         return $.backingOnLayerY;
     }
 
-    /// @notice The percentage of the total custom token minted by Native Converter on Layer Y for which backing cannot be migrated to Layer X; 1 is 1%.
+    /// @notice The percentage of the total supply of the custom token on Layer Y for which backing cannot be migrated to Layer X; 1 is 1%.
     /// @notice The limit does not apply to the owner.
     function nonMigratableBackingPercentage() public view returns (uint256) {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
@@ -200,8 +192,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         // Mint the custom token to the receiver.
         $.customToken.mint(receiver, shares);
 
-        // Update the custom token and backing data.
-        $.mintedCustomToken += shares;
+        // Update the backing data.
         $.backingOnLayerY += assets;
     }
 
@@ -240,6 +231,8 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
     /// @param shares The maximum amount of the custom token to simulate deconversion for.
     /// @param force Whether to enforce the amount, reverting if it cannot be met.
     function _simulateDeconvert(uint256 shares, bool force) internal view returns (uint256 deconvertedShares) {
+        NativeConverterStorage storage $ = _getNativeConverterStorage();
+
         // Check the input.
         require(shares > 0, "INVALID_AMOUNT");
 
@@ -250,7 +243,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         uint256 remainingAssets = assets;
 
         // Simulate withdrawal.
-        uint256 backingOnLayerY_ = backingOnLayerY();
+        uint256 backingOnLayerY_ = $.backingOnLayerY;
         if (backingOnLayerY_ >= remainingAssets) return shares;
         remainingAssets -= backingOnLayerY_;
 
@@ -292,19 +285,21 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         NativeConverterStorage storage $ = _getNativeConverterStorage();
 
         // Check the inputs.
-        require(destinationNetworkId != $.lxlyId, "INVALID_NETWORK");
-        require(assets > 0, "INVALID_AMOUNT");
+        require(shares > 0, "INVALID_AMOUNT");
         require(destinationAddress != address(0), "INVALID_ADDRESS");
 
         // Switch to the underlying token.
         // Set the return value.
-        assets = _convertToShares(assets);
+        assets = _convertToAssets(shares);
 
         // Get the available backing.
         uint256 backingOnLayerY_ = backingOnLayerY();
 
         // Try to deconvert.
         if (backingOnLayerY_ >= assets) {
+            // Update the backing data.
+            $.backingOnLayerY -= assets;
+
             // Burn the custom token.
             $.customToken.burn(msg.sender, shares);
 
@@ -327,10 +322,6 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
             // Revert if the backing on Layer Y is insufficient to serve the withdrawal.
             revert("AMOUNT_TOO_LARGE");
         }
-
-        // Update the custom token and backing data.
-        $.mintedCustomToken -= shares;
-        $.backingOnLayerY -= assets;
     }
 
     /// @notice Tells how much a specific amount of underlying token is worth in the custom token.
@@ -356,13 +347,19 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
     function migrateBackingToLayerX() external whenNotPaused {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
 
-        // Calculate the amount to migrate.
+        // Calculate the amount that cannot be migrated.
         // @note Check rounding.
-        uint256 maximumBacking = _convertToAssets($.mintedCustomToken);
-        uint256 minimumBacking = (maximumBacking * $.nonMigratableBackingPercentage) / 100;
+        uint256 nonMigratableBacking =
+            (_convertToAssets($.customToken.totalSupply()) * $.nonMigratableBackingPercentage) / 100;
+
+        // Get the current backing on Layer Y.
         uint256 backingOnLayerY_ = backingOnLayerY();
-        require(backingOnLayerY_ >= minimumBacking, "MIGRATION_LIMIT_REACHED");
-        uint256 amountToMigrate = backingOnLayerY_ - minimumBacking;
+
+        // Check if the limit has been reached.
+        require(backingOnLayerY_ > nonMigratableBacking, "MIGRATION_LIMIT_REACHED");
+
+        // Calculate the amount to migrate.
+        uint256 amountToMigrate = backingOnLayerY_ - nonMigratableBacking;
 
         // Migrate the backing to Layer X.
         _migrateBackingToLayerX(amountToMigrate);
@@ -382,8 +379,9 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
 
         // Check the input.
         require(amount > 0, "INVALID_AMOUNT");
+        require(amount <= $.backingOnLayerY, "AMOUNT_TOO_LARGE");
 
-        // Update the backing data, including the historically migrated backing.
+        // Update the backing data.
         $.backingOnLayerY -= amount;
 
         // Precalculate the amount of the custom token for which backing is being migrated.
