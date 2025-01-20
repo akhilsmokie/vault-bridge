@@ -54,6 +54,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
     // Events.
     event MigrationStarted(address indexed sender, uint256 indexed customTokenAmount, uint256 backingAmount);
     event NonMigratableBackingPercentageChanged(uint256 nonMigratableBackingPercentage);
+    event MinimumBackingAfterMigrationChanged(uint256 minimumBackingAfterMigration);
 
     /// @param originalUnderlyingTokenDecimals_ The number of decimals of the original underlying token on Layer X. The `customToken` and `underlyingToken` must have the same number of decimals as the original underlying token.
     /// @param customToken_ The token custom mapped to the custom token on LxLy Bridge on Layer Y.
@@ -439,6 +440,23 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
 
         // Emit the event.
         emit NonMigratableBackingPercentageChanged(nonMigratableBackingPercentage_);
+    }
+
+    /// @notice Sets the minimum backing after migration.
+    /// @notice The limit does not apply to the owner.
+    /// @notice This function can be called by the owner only.
+    function changeMinimumBackingAfterMigration(uint256 minimumBackingAfterMigration_)
+        external
+        onlyOwner
+        whenNotPaused
+    {
+        NativeConverterStorage storage $ = _getNativeConverterStorage();
+
+        // Set the minimum backing after migration.
+        $.minimumBackingAfterMigration = minimumBackingAfterMigration_;
+
+        // Emit the event.
+        emit MinimumBackingAfterMigrationChanged(minimumBackingAfterMigration_);
     }
 
     // -----================= ::: ADMIN ::: =================-----
