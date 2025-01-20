@@ -59,7 +59,13 @@ abstract contract YieldExposedToken is
     // Events.
     event ReserveRebalanced(uint256 reservedAssets);
     event YieldCollected(address indexed yieldRecipient, uint256 yeTokenAmount);
-    event MigrationCompleted(uint32 indexed destinationNetworkId, uint256 indexed shares, uint256 utilizedYield);
+    event MigrationCompleted(
+        uint32 indexed destinationNetworkId,
+        uint256 indexed shares,
+        uint256 assetsBeforeTransferFee,
+        uint256 assets,
+        uint256 usedYield
+    );
     event YieldRecipientChanged(address indexed yieldRecipient);
     event MinimumReservePercentageChanged(uint8 minimumReservePercentage);
 
@@ -188,8 +194,7 @@ abstract contract YieldExposedToken is
     }
 
     /// @notice The total backing of yeToken in the underlying token.
-    /// @notice May be less that the actual amount if backing in Native Converter on Layer Ys hasn't been migrated to Layer X yet.
-    /// @dev Does not account for any assets held temporarily by the contract (such as those received from the sender).
+    /// @dev Important: This amount also includes assets held temporarily by the contract (such as those received from the sender). You must subtract those manually.
     function totalAssets() public view returns (uint256 totalManagedAssets) {
         return stakedAssets() + reservedAssets();
     }
@@ -623,7 +628,7 @@ abstract contract YieldExposedToken is
 
     /// @notice Yield exposed tokens have an internal reserve of the underlying token from which withdrawals are served first.
     /// @notice The reserve can be refilled by calling `replenishReserve` when it is below the `minimumReservePercentage`.
-    /// @dev Does not account for any assets held temporarily by the contract (such as those received from the sender).
+    /// @dev Important: This amount also includes any assets held temporarily by the contract (such as those received from the sender). You must subtract those manually.
     function reservedAssets() public view returns (uint256) {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
         return $.underlyingToken.balanceOf(address(this));
@@ -774,6 +779,7 @@ abstract contract YieldExposedToken is
 
         // Modify the input.
         // Accounts for a transfer fee when the `assets` were claimed from LxLy Bridge.
+        uint256 assetsBeforeTransferFee = assets;
         assets = _assetsAfterTransferFee(assets);
 
         // Check the inputs.
@@ -785,7 +791,7 @@ abstract contract YieldExposedToken is
         assets = _receiveUnderlyingToken(msg.sender, assets);
 
         // Calculate discrepancy between the required amount of yeToken (`shares`) and the amount of the underlying token transferred from Migration Manager (`assets`).
-        // Discrepancy is possible due to transfer fees of the underlying token. To offset the discrepancy, we mint more yeToken backed by the yield in the yield vault.
+        // Discrepancy is possible due to transfer fees of the underlying token. To offset the discrepancy, we mint more yeToken backed by available yield.
         // This ensures that the amount of yeToken locked up in LxLy Bridge on Layer X matches the supply of the custom token on Layer Ys.
         uint256 sharesInAssets = convertToAssets(shares);
         uint256 discrepancy = sharesInAssets - assets;
@@ -815,13 +821,13 @@ abstract contract YieldExposedToken is
         emit IERC4626.Deposit(msg.sender, address(this), assets, shares);
 
         // Emit the event.
-        emit MigrationCompleted(originNetworkId, shares, discrepancy);
+        emit MigrationCompleted(originNetworkId, shares, assetsBeforeTransferFee, assets, discrepancy);
     }
 
     /// @notice Sets the yield recipient.
     /// @notice Yield will be collected before changing the recipient.
     /// @notice This function can be called by the owner only.
-    function setYieldRecipient(address yieldRecipient_) external onlyOwner whenNotPaused {
+    function changeYieldRecipient(address yieldRecipient_) external onlyOwner whenNotPaused {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
 
         // Check the input.
@@ -840,7 +846,7 @@ abstract contract YieldExposedToken is
     /// @notice Sets the minimum reserve percentage.
     /// @notice The reserve will be rebalanced after changing the minimum reserve percentage.
     /// @notice This function can be called by the owner only.
-    function setMinimumReservePercentage(uint8 minimumReservePercentage_) external onlyOwner whenNotPaused {
+    function changeMinimumReservePercentage(uint8 minimumReservePercentage_) external onlyOwner whenNotPaused {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
 
         // Check the input.
