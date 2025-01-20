@@ -52,7 +52,7 @@ abstract contract NativeConverter is Initializable, OwnableUpgradeable, Pausable
         0xb6887066a093cfbb0ec14b46507f657825a892fd6a4c4a1ef4fc83e8c7208c00;
 
     // Events.
-    event MigrationStarted(address indexed sender, uint256 indexed customTokenAmount, uint256 backingAmount);
+    event MigrationStarted(address indexed initiator, uint256 indexed backedCustomTokenAmount, uint256 backingAmount);
     event NonMigratableBackingPercentageChanged(uint256 nonMigratableBackingPercentage);
     event MinimumBackingAfterMigrationChanged(uint256 minimumBackingAfterMigration);
 
