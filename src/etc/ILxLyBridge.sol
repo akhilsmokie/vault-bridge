@@ -29,5 +29,4 @@ interface ILxLyBridge {
         bool forceUpdateGlobalExitRoot,
         bytes calldata metadata
     ) external payable;
-    function depositCount() external view returns (uint32);
 }
