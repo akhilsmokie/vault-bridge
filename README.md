@@ -10,6 +10,7 @@ The STB system is comprised of:
   - [Yield Exposed Token](src/YieldExposedToken.sol)
   - [Migration Manager](src/MigrationManager.sol)
 - Layer Y
+  - [Custom Token](src/CustomToken.sol)
   - [Native Converter](src/NativeConverter.sol)
 
 A Yield Exposed Token (yeToken) is an
