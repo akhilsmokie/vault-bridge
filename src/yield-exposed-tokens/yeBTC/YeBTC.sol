@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+pragma solidity 0.8.28;
+
+import {GenericYeToken} from "../GenericYeToken.sol";
+
+/// @title Yield Exposed BTC
+/// @dev WBTC does not have a transfer fee, and no customization is required.
+/// @dev This contract does not need to be deployed. You can point `YeBTC` proxy to `GenericYeToken` instead.
+contract YeBTC is GenericYeToken {}
