@@ -12,8 +12,9 @@ interface ILxLyBridge {
         bytes calldata permitData
     ) external payable;
     function claimAsset(
-        bytes32[32] calldata smtProof,
-        uint32 index,
+        bytes32[32] calldata smtProofLocalExitRoot,
+        bytes32[32] calldata smtProofRollupExitRoot,
+        uint256 globalIndex,
         bytes32 mainnetExitRoot,
         bytes32 rollupExitRoot,
         uint32 originNetwork,
