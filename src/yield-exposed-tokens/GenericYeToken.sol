@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity 0.8.28;
 
+/// @dev Main functionality.
 import {YieldExposedToken} from "../YieldExposedToken.sol";
+
+/// @dev Other functionality.
+import {IVersioned} from "../etc/IVersioned.sol";
 
 /// @title Generic Yield Exposed Token
 /// @dev This contract can be used to deploy yeTokens that do not require any customization, and the underlying token does not have a transfer fee.
@@ -34,6 +38,15 @@ contract GenericYeToken is YieldExposedToken {
             migrationManager_
         );
     }
+
+    // -----================= ::: INFO ::: =================-----
+
+    /// @inheritdoc IVersioned
+    function version() external pure virtual returns (string memory) {
+        return "1.0.0";
+    }
+
+    // -----================= ::: DEVELOPER ::: =================-----
 
     /// @dev The underlying token does not have a transfer fee.
     function _assetsAfterTransferFee(uint256 assetsBeforeTransferFee)

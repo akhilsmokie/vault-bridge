@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity 0.8.28;
 
+/// @dev Main functionality.
 import {YieldExposedToken} from "../../YieldExposedToken.sol";
+
+/// @dev Other functionality.
+import {IVersioned} from "../../etc/IVersioned.sol";
 
 /// @title Yield Exposed USDT
 contract YeUSDT is YieldExposedToken {
@@ -19,6 +23,7 @@ contract YeUSDT is YieldExposedToken {
     /// @dev Calculated as `keccak256(abi.encode(uint256(keccak256("0xpolygon.storage.YeUSDT")) - 1)) & ~bytes32(uint256(0xff))`.
     bytes32 private constant _YEUSDT_STORAGE = 0x8ee293a165ac3d78d3724b0faed67bcdb8e52fa45b6e98021a6acfdf2696c100;
 
+    // Events.
     event USDTTransferFeeParametersRecached(uint256 cachedBasisPointsRate, uint256 cachedMaximumFee);
 
     constructor() {
@@ -93,6 +98,15 @@ contract YeUSDT is YieldExposedToken {
         // Emit the event.
         emit USDTTransferFeeParametersRecached($.cachedBasisPointsRate, $.cachedMaximumFee);
     }
+
+    // -----================= ::: INFO ::: =================-----
+
+    /// @inheritdoc IVersioned
+    function version() external pure virtual returns (string memory) {
+        return "1.0.0";
+    }
+
+    // -----================= ::: DEVELOPER ::: =================-----
 
     // @note Review and document.
     /// @dev USDT has a transfer fee.
