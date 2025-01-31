@@ -18,10 +18,10 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 
 /// @dev External contracts.
 import {ILxLyBridge} from "./etc/ILxLyBridge.sol";
-
-/// @dev Other.
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+
+/// @dev Other.
 import {ERC20Upgradeable} from "@openzeppelin-contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 
 /// @title Yield Exposed Token
@@ -242,7 +242,6 @@ abstract contract YieldExposedToken is
         return _totalAssets(0);
     }
 
-    // @note Make sure this cannot be utilized in reentrancy attacks.
     /// @notice The total backing of yeToken in the underlying token.
     /// @param temporaryAssets Accounts for assets held temporarily by the contract (such as those received from the sender).
     /// @dev IMPORTANT: You are responsible for making sure `temporaryAssets` does not accumulate in different functions.
@@ -251,14 +250,14 @@ abstract contract YieldExposedToken is
     }
 
     /// @notice Tells how much a specific amount of underlying token is worth in yeToken.
-    ///@dev The underlying token backs yeToken 1:1.
+    /// @dev The underlying token backs yeToken 1:1.
     function convertToShares(uint256 assets) public pure returns (uint256 shares) {
         // CAUTION! Changing this function will affect the conversion rate for the entire contract, and may introduce bugs.
         shares = assets;
     }
 
     /// @notice Tells how much a specific amount of yeToken is worth in the underlying token.
-    ///@dev The underlying token backs yeToken 1:1.
+    /// @dev yeToken is backed by the underlying token 1:1.
     function convertToAssets(uint256 shares) public pure returns (uint256 assets) {
         // CAUTION! Changing this function will affect the conversion rate for the entire contract, and may introduce bugs.
         assets = shares;
@@ -283,17 +282,6 @@ abstract contract YieldExposedToken is
         (shares,) = _deposit(assets, $.lxlyId, receiver, false, 0);
     }
 
-    /// @notice Deposit a specific amount of the underlying token and mint yeToken.
-    /// @dev Uses EIP-2612 permit to transfer the underlying token from the sender to self.
-    function depositWithPermit(uint256 assets, address receiver, bytes calldata permitData)
-        external
-        whenNotPaused
-        returns (uint256 shares)
-    {
-        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
-        (shares,) = _depositWithPermit(assets, permitData, $.lxlyId, receiver, false, 0);
-    }
-
     /// @notice Deposit a specific amount of the underlying token, and bridge minted yeToken to another network.
     /// @dev If yeToken is custom mapped on LxLy Bridge on the other network, the user will receive the custom token. Otherwise, they will receive wrapped yeToken.
     /// @dev The `receiver` in the ERC-4626 `Deposit` event will be this contract.
@@ -309,25 +297,6 @@ abstract contract YieldExposedToken is
         require(destinationNetworkId != $.lxlyId, InvalidDestinationNetworkId());
 
         (shares,) = _deposit(assets, destinationNetworkId, receiver, forceUpdateGlobalExitRoot, 0);
-    }
-
-    /// @notice Deposit a specific amount of the underlying token, and bridge minted yeToken to another network.
-    /// @dev If yeToken is custom mapped on LxLy Bridge on the other network, the user will receive the custom token. Otherwise, they will receive wrapped yeToken.
-    /// @dev Uses EIP-2612 permit to transfer the underlying token from the sender to self.
-    /// @dev The `receiver` in the ERC-4626 `Deposit` event will be this contract.
-    function depositAndBridgeWithPermit(
-        uint256 assets,
-        address receiver,
-        uint32 destinationNetworkId,
-        bool forceUpdateGlobalExitRoot,
-        bytes calldata permitData
-    ) external whenNotPaused returns (uint256 shares) {
-        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
-
-        // Check the input.
-        require(destinationNetworkId != $.lxlyId, InvalidDestinationNetworkId());
-
-        (shares,) = _depositWithPermit(assets, permitData, destinationNetworkId, receiver, forceUpdateGlobalExitRoot, 0);
     }
 
     /// @notice Locks the underlying token, mints yeToken, and optionally bridges it to another network.
@@ -407,8 +376,39 @@ abstract contract YieldExposedToken is
         emit IERC4626.Deposit(msg.sender, receiver, assets, shares);
     }
 
+    /// @notice Deposit a specific amount of the underlying token and mint yeToken.
+    /// @dev Uses EIP-2612 permit to transfer the underlying token from the sender to self.
+    function depositWithPermit(uint256 assets, address receiver, bytes calldata permitData)
+        external
+        whenNotPaused
+        returns (uint256 shares)
+    {
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+        (shares,) = _depositWithPermit(assets, permitData, $.lxlyId, receiver, false, 0);
+    }
+
+    /// @notice Deposit a specific amount of the underlying token, and bridge minted yeToken to another network.
+    /// @dev If yeToken is custom mapped on LxLy Bridge on the other network, the user will receive the custom token. Otherwise, they will receive wrapped yeToken.
+    /// @dev Uses EIP-2612 permit to transfer the underlying token from the sender to self.
+    /// @dev The `receiver` in the ERC-4626 `Deposit` event will be this contract.
+    function depositWithPermitAndBridge(
+        uint256 assets,
+        address receiver,
+        uint32 destinationNetworkId,
+        bool forceUpdateGlobalExitRoot,
+        bytes calldata permitData
+    ) external whenNotPaused returns (uint256 shares) {
+        YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
+
+        // Check the input.
+        require(destinationNetworkId != $.lxlyId, InvalidDestinationNetworkId());
+
+        (shares,) = _depositWithPermit(assets, permitData, destinationNetworkId, receiver, forceUpdateGlobalExitRoot, 0);
+    }
+
     /// @notice Locks the underlying token, mints yeToken, and optionally bridges it to another network.
-    /// @dev Uses EIP-2612 permit to transfer the underlying token from the sender to itself.
+    /// @param maxShares Caps the amount of yeToken that is minted. Unused underlying token will be refunded to the sender. Set to `0` to disable.
+    /// @dev Uses EIP-2612 permit to transfer the underlying token from the sender to self.
     function _depositWithPermit(
         uint256 assets,
         bytes calldata permitData,
@@ -884,7 +884,7 @@ abstract contract YieldExposedToken is
         _rebalanceReserve(false, true);
     }
 
-    /// @notice Completes migration of backing in the underlying token from a Layer Y to Layer X by minting and locking up the required amount of yeToken in LxLy Bridge.  Please refer to `MigrationManager.sol` for more information.
+    /// @notice Completes migration of backing in the underlying token from a Layer Y to Layer X by minting and locking up the required amount of yeToken in LxLy Bridge. Please refer to `MigrationManager.sol` for more information.
     /// @notice This function can be called by the Migration Manager only.
     /// @param originNetworkId The LxLy ID of Layer Y the backing is being migrated from.
     /// @param shares The required amount of yeToken to mint and lock up in LxLy Bridge. Available yield may be used to offset transfer fees of the underlying token. If a migration cannot be completed (due to insufficient yield to cover for the discrepancy), anyone can send the underlying token to the contract directly to increase available yield.
@@ -902,7 +902,7 @@ abstract contract YieldExposedToken is
         require(originNetworkId != $.lxlyId, InvalidOriginNetworkId());
         require(shares > 0, InvalidShares());
 
-        // Transfer the underlying token from the sender to itself.
+        // Transfer the underlying token from the sender to self.
         assets = _receiveUnderlyingToken(msg.sender, assets);
 
         // Calculate the discrepancy between the required amount of yeToken (`shares`) and the amount of the underlying token transferred from Migration Manager (`assets`).
@@ -993,9 +993,9 @@ abstract contract YieldExposedToken is
 
     // -----================= ::: DEVELOPER ::: =================-----
 
-    /// @notice Transfers the underlying token from an external account to itself.
+    /// @notice Transfers the underlying token from an external account to self.
     /// @dev This function can be overridden to implement custom transfer logic.
-    /// @dev CAUTION! This function MUST NOT introduce reentrancy vulnerabilities.
+    /// @dev CAUTION! This function MUST NOT introduce reentrancy/cross-entrancy vulnerabilities.
     /// @return receivedValue The amount of the underlying actually received (e.g., after transfer fees).
     function _receiveUnderlyingToken(address from, uint256 value) internal virtual returns (uint256 receivedValue) {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
@@ -1008,7 +1008,7 @@ abstract contract YieldExposedToken is
 
     /// @notice Transfers the underlying token to an external account.
     /// @dev This function can be overridden to implement custom transfer logic.
-    /// @dev CAUTION! This function MUST NOT introduce reentrancy vulnerabilities.
+    /// @dev CAUTION! This function MUST NOT introduce reentrancy/cross-entrancy vulnerabilities.
     function _sendUnderlyingToken(address to, uint256 value) internal virtual {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
 
