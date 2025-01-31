@@ -928,7 +928,7 @@ abstract contract YieldExposedToken is
         }
 
         // Mint yeToken to self and bridge it to address zero on the origin network.
-        // The yeToken will not be claimable on the origin network, but provides liquidity for bridging from Layer Ys to Layer X and increments the pessimistic proof.
+        // The yeToken will not be claimable on the origin network, but provides liquidity when bridging from Layer Ys to Layer X and increments the pessimistic proof.
         _mint(address(this), shares);
         lxlyBridge().bridgeAsset(originNetworkId, address(0), shares, address(this), true, "");
 
