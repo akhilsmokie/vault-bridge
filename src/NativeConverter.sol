@@ -33,7 +33,8 @@ abstract contract NativeConverter is
 
     /// @dev Used in cross-network communication.
     enum CrossNetworkInstruction {
-        COMPLETE_MIGRATION
+        COMPLETE_MIGRATION,
+        WRAP_COIN_AND_COMPLETE_MIGRATION
     }
 
     /**
