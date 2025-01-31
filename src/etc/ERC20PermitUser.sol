@@ -5,9 +5,9 @@ pragma solidity 0.8.28;
 /// @dev Mimics the behavior of LxLy Bridge for validating and using ERC-20 permits.
 abstract contract ERC20PermitUser {
     /// @dev Calculated as `bytes4(keccak256(bytes("permit(address,address,uint256,uint256,uint8,bytes32,bytes32)")))`.
-    bytes4 private constant _PERMIT_SELECTOR_ERC_2612 = 0xd505accf;
+    bytes4 private constant _PERMIT_SELECTOR_ERC_2612 = hex"d505accf";
     // Calculated as `bytes4(keccak256(bytes("permit(address,address,uint256,uint256,bool,uint8,bytes32,bytes32)")))`.
-    bytes4 private constant _PERMIT_SELECTOR_DAI = 0x8fcbaf0c;
+    bytes4 private constant _PERMIT_SELECTOR_DAI = hex"8fcbaf0c";
 
     // Errors.
     error InvalidOwnerInERC20Permit(address owner, address expectedOwner);
