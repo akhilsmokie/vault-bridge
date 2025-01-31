@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity 0.8.28;
 
+/// @dev Main functionality.
 import {NativeConverter} from "../NativeConverter.sol";
+
+/// @dev Other functionality.
+import {IVersioned} from "../etc/IVersioned.sol";
 
 /// @title Generic Native Converter
 /// @dev This contract can be used to deploy Native Converters that do not require any customization.
@@ -18,7 +22,7 @@ abstract contract GenericNativeConverter is NativeConverter {
         uint256 nonMigratableBackingPercentage_,
         uint256 minimumBackingAfterMigration_,
         address lxlyBridge_,
-        uint32 layerXNetworkId_,
+        uint32 layerXLxlyId_,
         address migrationManager_
     ) external initializer {
         // Initialize the base implementation.
@@ -30,8 +34,15 @@ abstract contract GenericNativeConverter is NativeConverter {
             nonMigratableBackingPercentage_,
             minimumBackingAfterMigration_,
             lxlyBridge_,
-            layerXNetworkId_,
+            layerXLxlyId_,
             migrationManager_
         );
+    }
+
+    // -----================= ::: INFO ::: =================-----
+
+    /// @inheritdoc IVersioned
+    function version() external pure virtual returns (string memory) {
+        return "1.0.0";
     }
 }
