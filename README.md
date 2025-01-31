@@ -8,10 +8,12 @@ The STB system is comprised of:
 
 - Layer X
   - [Yield Exposed Token](src/YieldExposedToken.sol)
-  - [Migration Manager](src/MigrationManager.sol)
+  - [Migration Manager](src/MigrationManager.sol) (singleton)
 - Layer Y
   - [Custom Token](src/CustomToken.sol)
   - [Native Converter](src/NativeConverter.sol)
+
+### Yield Exposed Token
 
 A Yield Exposed Token (yeToken) is an
 
@@ -19,7 +21,7 @@ A Yield Exposed Token (yeToken) is an
 - [ERC-4626](https://eips.ethereum.org/EIPS/eip-4626) vault
 - [LxLy Bridge](https://github.com/0xPolygonHermez/zkevm-contracts) extension
 
-enabling deposits and bridging of assets such as WETH, USDC, USDT, and DAI, while producing yield.
+enabling deposits and bridging of assets such as WBTC, WETH, USDC, USDT, and DAI, while producing yield.
 
 For more information, see the NatSpec documentation.
 
