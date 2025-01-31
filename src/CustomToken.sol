@@ -1,19 +1,20 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity 0.8.28;
 
+/// @dev Main functionality.
 import {ERC20PermitUpgradeable} from
     "@openzeppelin-contracts-upgradeable/token/ERC20/extensions/ERC20PermitUpgradeable.sol";
 
+/// @dev Other functionality.
 import {Initializable} from "@openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 import {OwnableUpgradeable} from "@openzeppelin-contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {PausableUpgradeable} from "@openzeppelin-contracts-upgradeable/utils/PausableUpgradeable.sol";
-
 import {IVersioned} from "./etc/IVersioned.sol";
 
 /// @title Custom Token
-/// @notice A custom token is an ERC-20 token deployed on Layer Ys to be the native version of the original underlying token from Layer X on Layer Y.
+/// @notice A custom token is an ERC-20 token deployed on Layer Ys to represent the native version of the original underlying token from Layer X on Layer Y.
 /// @dev A base contract used to create custom tokens.
-/// @dev The custom token MUST be custom mapped to the original underlying token on Layer Y and MUST give minting and burning permissions to LxLy Bridge and Native Converter.
+/// @dev The custom token MUST be custom mapped to the corresponding yeToken on LxLy Bridge on Layer Y and MUST give the minting and burning permission to LxLy Bridge and Native Converter. It MAY have a transfer fee.
 abstract contract CustomToken is
     Initializable,
     OwnableUpgradeable,
@@ -34,7 +35,8 @@ abstract contract CustomToken is
 
     /// @dev The storage slot at which Custom Token storage starts, following the EIP-7201 standard.
     /// @dev Calculated as `keccak256(abi.encode(uint256(keccak256("0xpolygon.storage.CustomToken")) - 1)) & ~bytes32(uint256(0xff))`.
-    bytes32 private constant _CUSTOM_TOKEN_STORAGE = 0x5bbe451cf8915ac9b43b69d5987da5a42549d90a2c7cab500dae45ea6889c900;
+    bytes32 private constant _CUSTOM_TOKEN_STORAGE =
+        hex"5bbe451cf8915ac9b43b69d5987da5a42549d90a2c7cab500dae45ea6889c900";
 
     // Errors.
     error Unauthorized();
@@ -154,13 +156,13 @@ abstract contract CustomToken is
 
     /// @notice Mints custom tokens to the recipient.
     /// @notice This function can be called by LxLy Bridge and Native Converter only.
-    function mint(address account, uint256 value) external {
+    function mint(address account, uint256 value) external onlyMinterBurner {
         _mint(account, value);
     }
 
     /// @notice Burns custom tokens from a holder.
     /// @notice This function can be called by LxLy Bridge and Native Converter only.
-    function burn(address account, uint256 value) external {
+    function burn(address account, uint256 value) external onlyMinterBurner {
         _burn(account, value);
     }
 
@@ -176,13 +178,6 @@ abstract contract CustomToken is
     /// @notice This function can be called by the owner only.
     function unpause() external onlyOwner {
         _unpause();
-    }
-
-    // -----================= ::: INFO ::: =================-----
-
-    /// @inheritdoc IVersioned
-    function version() external pure virtual returns (string memory) {
-        return "1.0.0";
     }
 }
 
