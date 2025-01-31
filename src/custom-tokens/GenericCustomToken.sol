@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity 0.8.28;
 
+/// @dev Main functionality.
 import {CustomToken} from "../CustomToken.sol";
+
+/// @dev Other functionality.
+import {IVersioned} from "../etc/IVersioned.sol";
 
 /// @title Generic Custom Token
 /// @dev This contract can be used to deploy custom tokens that do not require any customization.
@@ -20,5 +24,12 @@ abstract contract GenericCustomToken is CustomToken {
     ) external initializer {
         // Initialize the base implementation.
         __CustomToken_init(owner_, name_, symbol_, originalUnderlyingTokenDecimals_, lxlyBridge_, nativeConverter_);
+    }
+
+    // -----================= ::: INFO ::: =================-----
+
+    /// @inheritdoc IVersioned
+    function version() external pure virtual returns (string memory) {
+        return "1.0.0";
     }
 }

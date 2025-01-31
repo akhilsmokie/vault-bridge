@@ -21,7 +21,7 @@ contract YeUSDT is YieldExposedToken {
 
     /// @dev The storage slot at which Yield Exposed USDT storage starts, following the EIP-7201 standard.
     /// @dev Calculated as `keccak256(abi.encode(uint256(keccak256("0xpolygon.storage.YeUSDT")) - 1)) & ~bytes32(uint256(0xff))`.
-    bytes32 private constant _YEUSDT_STORAGE = 0x8ee293a165ac3d78d3724b0faed67bcdb8e52fa45b6e98021a6acfdf2696c100;
+    bytes32 private constant _YEUSDT_STORAGE = hex"8ee293a165ac3d78d3724b0faed67bcdb8e52fa45b6e98021a6acfdf2696c100";
 
     // Events.
     event USDTTransferFeeParametersRecached(uint256 cachedBasisPointsRate, uint256 cachedMaximumFee);
