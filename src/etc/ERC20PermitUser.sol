@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 /// @title ERC-20 Permit User
-/// @dev Mimics the behavior of LxLy Bridge for validating and applying ERC-20 permits.
+/// @dev Mimics the behavior of LxLy Bridge for validating and using ERC-20 permits.
 abstract contract ERC20PermitUser {
     /// @dev Calculated as `bytes4(keccak256(bytes("permit(address,address,uint256,uint256,uint8,bytes32,bytes32)")))`.
     bytes4 private constant _PERMIT_SELECTOR_ERC_2612 = 0xd505accf;
@@ -16,7 +16,7 @@ abstract contract ERC20PermitUser {
     error InvalidSelectorInERC20Permit(bytes4 selector);
 
     function _permit(address token, uint256 minimumAmount, bytes calldata permitData) internal {
-        // Get the selector from the permit data.
+        // Get the `permit` selector from the permit data.
         bytes4 sig = bytes4(permitData[:4]);
 
         // ERC-2612 permit.
