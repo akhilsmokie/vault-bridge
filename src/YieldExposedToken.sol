@@ -82,7 +82,7 @@ abstract contract YieldExposedToken is
     error AssetsTooLarge(uint256 availableAssets, uint256 requestedAssets);
     error IncorrectAmountOfSharesRedeemed(uint256 redeemedShares, uint256 requiredShares);
     error CannotRebalanceReserve();
-    error NoNeedToReplanishReserve();
+    error NoNeedToReplenishReserve();
     error Unauthorized();
     error NoYield();
     error InvalidOriginNetworkId();
@@ -826,7 +826,7 @@ abstract contract YieldExposedToken is
                 revert CannotRebalanceReserve();
             }
         } else if (force) {
-            revert NoNeedToReplanishReserve();
+            revert NoNeedToReplenishReserve();
         }
     }
 
@@ -946,7 +946,7 @@ abstract contract YieldExposedToken is
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
 
         // Check the input.
-        require(yieldRecipient_ != address(0), "INVALID_YIELD_RECIPIENT");
+        require(yieldRecipient_ != address(0), InvalidYieldRecipient());
 
         // Try to collect yield.
         _collectYield(false);
@@ -965,7 +965,7 @@ abstract contract YieldExposedToken is
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
 
         // Check the input.
-        require(minimumReservePercentage_ <= 1e18, "INVALID_PERCENTAGE");
+        require(minimumReservePercentage_ <= 1e18, InvalidMinimumReservePercentage());
 
         // Set the minimum reserve percentage.
         $.minimumReservePercentage = minimumReservePercentage_;
