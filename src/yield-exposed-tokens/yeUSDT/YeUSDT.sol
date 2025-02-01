@@ -35,7 +35,7 @@ contract YeUSDT is YieldExposedToken {
         string calldata name_,
         string calldata symbol_,
         address underlyingToken_,
-        uint8 minimumReservePercentage_,
+        uint256 minimumReservePercentage_,
         address yieldVault_,
         address yieldRecipient_,
         address lxlyBridge_,
