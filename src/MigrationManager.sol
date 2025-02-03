@@ -49,7 +49,7 @@ contract MigrationManager is Initializable, OwnableUpgradeable, PausableUpgradea
     bytes32 private constant _MIGRATION_MANAGER_STORAGE =
         hex"aec447ccc4dc1a1a20af7f847edd1950700343642e68dd8266b4de5e0e190a00";
 
-    /// @dev The function selector for wrapping Layer X's coin, following the WETH9 standard (including no transfer fee).
+    /// @dev The function selector for wrapping Layer X's coin, following the WETH9 standard.
     /// @dev (ATTENTION) If the method of wrapping the coin for your Layer X differs, you must modify this contract.
     /// @dev Calculated as `bytes4(keccak256("deposit()"))`.
     bytes4 private constant _UNDERLYING_TOKEN_WRAP_SELECTOR = hex"d0e30db0";

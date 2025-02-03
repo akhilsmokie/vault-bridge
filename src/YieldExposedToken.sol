@@ -61,7 +61,7 @@ abstract contract YieldExposedToken is
     /// @dev The storage slot at which Yield Exposed Token storage starts, following the EIP-7201 standard.
     /// @dev Calculated as `keccak256(abi.encode(uint256(keccak256("0xpolygon.storage.YieldExposedToken")) - 1)) & ~bytes32(uint256(0xff))`.
     bytes32 private constant _YIELD_EXPOSED_TOKEN_STORAGE =
-        0xed23de664e59f2cbf6ba852da776346da171cf53c9d06b116fea0fc5ee912500;
+        hex"ed23de664e59f2cbf6ba852da776346da171cf53c9d06b116fea0fc5ee912500";
 
     // Errors.
     error InvalidOwner();
