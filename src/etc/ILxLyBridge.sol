@@ -30,4 +30,5 @@ interface ILxLyBridge {
         bool forceUpdateGlobalExitRoot,
         bytes calldata metadata
     ) external payable;
+    function wrappedAddressIsNotMintable(address wrappedAddress) external view returns (bool isNotMintable);
 }
