@@ -524,7 +524,7 @@ abstract contract NativeConverter is
         NativeConverterStorage storage $ = _getNativeConverterStorage();
 
         // Check the input.
-        require(nonMigratableBackingPercentage_ <= 100, InvalidNonMigratableBackingPercentage());
+        require(nonMigratableBackingPercentage_ <= 1e18, InvalidNonMigratableBackingPercentage());
 
         // Set the non-migratable backing percentage.
         $.nonMigratableBackingPercentage = nonMigratableBackingPercentage_;
