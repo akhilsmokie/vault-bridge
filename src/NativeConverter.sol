@@ -18,7 +18,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 /// @title Native Converter
-/// @notice Native Converter lives on Layer Ys and converts the underlying token (usually a bridge-wrapped token) to the custom token, and vice versa, on demand. It can also migrate backing for the custom token it has minted to Layer X, where yeToken gets minted and locked in LxLy Bridge (please refer to `migrateBackingToLayerX` for more information).
+/// @notice Native Converter lives on Layer Ys and converts the underlying token (usually a bridge-wrapped token) to the custom token, and vice versa, on demand. It can also migrate backing for the custom token it has minted to Layer X, where yeToken will be minted and locked in LxLy Bridge. Please refer to `migrateBackingToLayerX` for more information.
 /// @dev This contract MUST have mint and burn permission on the custom token. Please refer to `CustomToken.sol` for more information.
 abstract contract NativeConverter is
     Initializable,
@@ -45,6 +45,7 @@ abstract contract NativeConverter is
     struct NativeConverterStorage {
         CustomToken customToken;
         IERC20 underlyingToken;
+        bool _underlyingTokenIsNotMintable;
         uint256 backingOnLayerY;
         uint256 nonMigratableBackingPercentage;
         uint256 minimumBackingAfterMigration;
@@ -57,7 +58,7 @@ abstract contract NativeConverter is
     /// @dev The storage slot at which Migration Manager storage starts, following the EIP-7201 standard.
     /// @dev Calculated as `keccak256(abi.encode(uint256(keccak256("0xpolygon.storage.NativeConverter")) - 1)) & ~bytes32(uint256(0xff))`.
     bytes32 private constant _NATIVE_CONVERTER_STORAGE =
-        0xb6887066a093cfbb0ec14b46507f657825a892fd6a4c4a1ef4fc83e8c7208c00;
+        hex"b6887066a093cfbb0ec14b46507f657825a892fd6a4c4a1ef4fc83e8c7208c00";
 
     // Errors.
     error InvalidOwner();
@@ -81,7 +82,7 @@ abstract contract NativeConverter is
     event MinimumBackingAfterMigrationSet(uint256 minimumBackingAfterMigration);
 
     /// @param originalUnderlyingTokenDecimals_ The number of decimals of the original underlying token on Layer X. The `customToken` and `underlyingToken` MUST have the same number of decimals as the original underlying token. (ATTENTION) The decimals of the `customToken` and `underlyingToken` will default to 18 if they revert.
-    /// @param customToken_ The token custom mapped to yeToken on LxLy Bridge on Layer Y. Native Converter must be able to mint and burn this token; please refer to `CustomToken.sol` for more information.
+    /// @param customToken_ The token custom mapped to yeToken on LxLy Bridge on Layer Y. Native Converter must be able to mint and burn this token. Please refer to `CustomToken.sol` for more information.
     /// @param underlyingToken_ The token that represents the original underlying token on Layer Y. IMPORTANT: This token MUST be either the bridge-wrapped version of the original underlying token, or the original underlying token must be custom mapped to this token on LxLy Bridge on Layer Y.
     /// @param nonMigratableBackingPercentage_ The percentage of the total supply of the custom token on Layer Y for which backing cannot be migrated to Layer X; 1e18 is 100%. The limit does not apply to the owner. Accounts with a large custom token balance may be able to circumvent the limit by quickly bridging to another network, migrating the backing, then bridging back, which would prevent others from deconverting the custom token on Layer Y. The next parameter is used to mitigate this risk.
     /// @param minimumBackingAfterMigration_ The minimum amount of backing (the underlying token) that must remain on Layer Y after a migration. The requirement does not apply if the owner is migrating backing. This parameter mitigates the risk of accounts with a large custom token balance draining the underlying token liquidity from Native Converter.
@@ -140,6 +141,7 @@ abstract contract NativeConverter is
         // Initialize the storage.
         $.customToken = CustomToken(customToken_);
         $.underlyingToken = IERC20(underlyingToken_);
+        $._underlyingTokenIsNotMintable = ILxLyBridge(lxlyBridge_).wrappedAddressIsNotMintable(underlyingToken_);
         $.nonMigratableBackingPercentage = nonMigratableBackingPercentage_;
         $.minimumBackingAfterMigration = minimumBackingAfterMigration_;
         $.lxlyId = ILxLyBridge(lxlyBridge_).networkID();
@@ -499,7 +501,15 @@ abstract contract NativeConverter is
         uint256 shares = _convertToShares(assets);
 
         // Bridge the backing to Migration Manager on Layer X.
-        $.lxlyBridge.bridgeAsset($.layerXLxlyId, $.migrationManager, assets, address($.underlyingToken), true, "");
+        if ($._underlyingTokenIsNotMintable) {
+            // If the underlying token is not mintable by LxLy Bridge, we need to check for a transfer fee.
+            uint256 previousBalance = $.underlyingToken.balanceOf(address($.lxlyBridge));
+            $.lxlyBridge.bridgeAsset($.layerXLxlyId, $.migrationManager, assets, address($.underlyingToken), true, "");
+            assets = $.underlyingToken.balanceOf(address($.lxlyBridge)) - previousBalance;
+        } else {
+            // If the underlying token is mintable by LxLy Bridge, it gets burned and there is no transfer fee.
+            $.lxlyBridge.bridgeAsset($.layerXLxlyId, $.migrationManager, assets, address($.underlyingToken), true, "");
+        }
 
         // Bridge a message to Migration Manager on Layer X to complete the migration.
         $.lxlyBridge.bridgeMessage(
