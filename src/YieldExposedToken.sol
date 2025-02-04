@@ -902,7 +902,7 @@ abstract contract YieldExposedToken is
     /// @notice Adds a specific amount of the underlying token to the reserve by transferring it from the sender.
     /// @notice This function can be used to increase yield immediately in order to complete a migration when there is not enough available yield to cover for a discrepancy. Please refer to `completeMigration` for more information.
     /// @notice This function can be called by anyone.
-    /// @notice Emits a `Donation` event.
+    /// @notice Emits a `Donated` event.
     function donate(uint256 assets) external {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
 
