@@ -957,7 +957,7 @@ abstract contract YieldExposedToken is
     /// @dev The message tells yeToken on Layer X how much custom token must be backed by yeToken, which is minted and bridged to address zero on the respective Layer Y. This action provides liquidity when bridging the custom token to from Layer Ys to Layer X and increments the pessimistic proof.
     /// @param originNetworkId The LxLy ID of Layer Y the backing is being migrated from.
     /// @param shares The required amount of yeToken to mint and lock up in LxLy Bridge. Available yield may be used to offset transfer fees of the underlying token. If a migration cannot be completed (due to insufficient yield to cover for the discrepancy), anyone can `addToReserve` to increase available yield.
-    /// @param assets The amount of the underlying token to transfer from Migration Manager to self.
+    /// @param assets The amount of the underlying token migrated from Layer Y (before transfer fees on Layer X).
     function _completeMigration(uint32 originNetworkId, uint256 shares, uint256 assets) internal {
         YieldExposedTokenStorage storage $ = _getYieldExposedTokenStorage();
 
