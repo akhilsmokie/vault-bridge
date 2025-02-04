@@ -8,7 +8,6 @@ The STB system is comprised of:
 
 - Layer X
   - [Yield Exposed Token](src/YieldExposedToken.sol)
-  - [Migration Manager](src/MigrationManager.sol) (singleton)
 - Layer Y
   - [Custom Token](src/CustomToken.sol)
   - [Native Converter](src/NativeConverter.sol)

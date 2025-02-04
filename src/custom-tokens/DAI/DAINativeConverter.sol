@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 pragma solidity 0.8.28;
 
+/// @dev Main functionality.
 import {GenericNativeConverter} from "../GenericNativeConverter.sol";
 
 /// @title DAI Native Converter

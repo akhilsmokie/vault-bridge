@@ -23,7 +23,7 @@ abstract contract GenericNativeConverter is NativeConverter {
         uint256 minimumBackingAfterMigration_,
         address lxlyBridge_,
         uint32 layerXLxlyId_,
-        address migrationManager_
+        address yeToken_
     ) external initializer {
         // Initialize the base implementation.
         __NativeConverter_init(
@@ -35,7 +35,7 @@ abstract contract GenericNativeConverter is NativeConverter {
             minimumBackingAfterMigration_,
             lxlyBridge_,
             layerXLxlyId_,
-            migrationManager_
+            yeToken_
         );
     }
 

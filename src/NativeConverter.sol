@@ -34,7 +34,7 @@ abstract contract NativeConverter is
     /// @dev Used in cross-network communication.
     enum CrossNetworkInstruction {
         COMPLETE_MIGRATION,
-        WRAP_COIN_AND_COMPLETE_MIGRATION
+        CUSTOM
     }
 
     /**
@@ -52,10 +52,10 @@ abstract contract NativeConverter is
         uint32 lxlyId;
         ILxLyBridge lxlyBridge;
         uint32 layerXLxlyId;
-        address migrationManager;
+        address yeToken;
     }
 
-    /// @dev The storage slot at which Migration Manager storage starts, following the EIP-7201 standard.
+    /// @dev The storage slot at which Native Converter storage starts, following the EIP-7201 standard.
     /// @dev Calculated as `keccak256(abi.encode(uint256(keccak256("0xpolygon.storage.NativeConverter")) - 1)) & ~bytes32(uint256(0xff))`.
     bytes32 private constant _NATIVE_CONVERTER_STORAGE =
         hex"b6887066a093cfbb0ec14b46507f657825a892fd6a4c4a1ef4fc83e8c7208c00";
@@ -66,7 +66,7 @@ abstract contract NativeConverter is
     error InvalidUnderlyingToken();
     error InvalidNonMigratableBackingPercentage();
     error InvalidLxLyBridge();
-    error InvalidMigrationManager();
+    error InvalidYeToken();
     error NonMatchingCustomTokenDecimals(uint8 customTokenDecimals, uint8 originalUnderlyingTokenDecimals);
     error NonMatchingUnderlyingTokenDecimals(uint8 underlyingTokenDecimals, uint8 originalUnderlyingTokenDecimals);
     error InvalidAssets();
@@ -86,7 +86,7 @@ abstract contract NativeConverter is
     /// @param underlyingToken_ The token that represents the original underlying token on Layer Y. IMPORTANT: This token MUST be either the bridge-wrapped version of the original underlying token, or the original underlying token must be custom mapped to this token on LxLy Bridge on Layer Y.
     /// @param nonMigratableBackingPercentage_ The percentage of the total supply of the custom token on Layer Y for which backing cannot be migrated to Layer X; 1e18 is 100%. The limit does not apply to the owner. Accounts with a large custom token balance may be able to circumvent the limit by quickly bridging to another network, migrating the backing, then bridging back, which would prevent others from deconverting the custom token on Layer Y. The next parameter is used to mitigate this risk.
     /// @param minimumBackingAfterMigration_ The minimum amount of backing (the underlying token) that must remain on Layer Y after a migration. The requirement does not apply if the owner is migrating backing. This parameter mitigates the risk of accounts with a large custom token balance draining the underlying token liquidity from Native Converter.
-    /// @param migrationManager_ The address of Migration Manager on Layer X.
+    /// @param yeToken_ The address of yeToken on Layer X.
     function __NativeConverter_init(
         address owner_,
         uint8 originalUnderlyingTokenDecimals_,
@@ -96,7 +96,7 @@ abstract contract NativeConverter is
         uint256 minimumBackingAfterMigration_,
         address lxlyBridge_,
         uint32 layerXLxlyId_,
-        address migrationManager_
+        address yeToken_
     ) internal onlyInitializing {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
 
@@ -106,7 +106,7 @@ abstract contract NativeConverter is
         require(underlyingToken_ != address(0), InvalidUnderlyingToken());
         require(nonMigratableBackingPercentage_ <= 1e18, InvalidNonMigratableBackingPercentage());
         require(lxlyBridge_ != address(0), InvalidLxLyBridge());
-        require(migrationManager_ != address(0), InvalidMigrationManager());
+        require(yeToken_ != address(0), InvalidYeToken());
 
         // Check the custom token's decimals.
         uint8 customTokenDecimals;
@@ -147,9 +147,8 @@ abstract contract NativeConverter is
         $.lxlyId = ILxLyBridge(lxlyBridge_).networkID();
         $.lxlyBridge = ILxLyBridge(lxlyBridge_);
         $.layerXLxlyId = layerXLxlyId_;
-        $.migrationManager = migrationManager_;
+        $.yeToken = yeToken_;
 
-        // @note Check security implications.
         // Approve LxLy Bridge.
         $.underlyingToken.forceApprove(address($.lxlyBridge), type(uint256).max);
     }
@@ -201,10 +200,10 @@ abstract contract NativeConverter is
         return $.layerXLxlyId;
     }
 
-    /// @notice The address of Migration Manager on Layer X.
-    function migrationManager() public view returns (address) {
+    /// @notice The address of yeToken on Layer X.
+    function yeToken() public view returns (address) {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
-        return $.migrationManager;
+        return $.yeToken;
     }
 
     /**
@@ -245,7 +244,7 @@ abstract contract NativeConverter is
     /// @dev Uses EIP-2612 permit to transfer the underlying token from the sender to self.
     /// @param assets The amount of the underlying token to convert to the custom token.
     /// @return shares The amount of the custom token minted to the receiver.
-    function convertWithPermit(uint256 assets, bytes calldata permitData, address receiver)
+    function convertWithPermit(uint256 assets, address receiver, bytes calldata permitData)
         external
         whenNotPaused
         returns (uint256 shares)
@@ -318,8 +317,8 @@ abstract contract NativeConverter is
     /// @return assets The amount of the underlying token unlocked to the receiver.
     function deconvertAndBridge(
         uint256 shares,
-        uint32 destinationNetworkId,
         address receiver,
+        uint32 destinationNetworkId,
         bool forceUpdateGlobalExitRoot
     ) public whenNotPaused returns (uint256 assets) {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
@@ -375,7 +374,7 @@ abstract contract NativeConverter is
     /// @param shares The amount of the custom token to deconvert to the underlying token.
     /// @return assets The amount of the underlying token unlocked to the receiver.
     /// @dev Uses EIP-2612 permit to transfer the custom token from the sender to self.
-    function deconvertWithPermit(uint256 shares, bytes calldata permitData, address receiver)
+    function deconvertWithPermit(uint256 shares, address receiver, bytes calldata permitData)
         external
         whenNotPaused
         returns (uint256 assets)
@@ -390,10 +389,10 @@ abstract contract NativeConverter is
     /// @dev Uses EIP-2612 permit to transfer the custom token from the sender to self.
     function deconvertWithPermitAndBridge(
         uint256 shares,
-        bytes calldata permitData,
-        uint32 destinationNetworkId,
         address receiver,
-        bool forceUpdateGlobalExitRoot
+        uint32 destinationNetworkId,
+        bool forceUpdateGlobalExitRoot,
+        bytes calldata permitData
     ) external whenNotPaused returns (uint256 assets) {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
 
@@ -472,7 +471,7 @@ abstract contract NativeConverter is
 
     /// @notice Migrates a limited amount of backing to Layer X.
     /// @notice This action provides yeToken liquidity on LxLy Bridge on Layer X.
-    /// @notice The bridged assets and message must be claimed for Migration Manager on Layer X to complete the migration.
+    /// @notice The bridged assets and message must be claimed manually on Layer X to complete the migration.
     /// @notice This function can be called by anyone.
     function migrateBackingToLayerX() external whenNotPaused {
         _migrateBackingToLayerX(migratableBacking());
@@ -480,7 +479,7 @@ abstract contract NativeConverter is
 
     /// @notice Migrates any amount of backing to Layer X.
     /// @notice This action provides yeToken liquidity on LxLy Bridge on Layer X.
-    /// @notice The bridged assets and message must be claimed for Migration Manager on Layer X to complete the migration.
+    /// @notice The bridged assets and message must be claimed manually on Layer X to complete the migration.
     /// @notice This function can be called by the owner only.
     function migrateBackingToLayerX(uint256 assets) external whenNotPaused onlyOwner {
         _migrateBackingToLayerX(assets);
@@ -500,23 +499,20 @@ abstract contract NativeConverter is
         // Calculate the amount of the custom token for which backing is being migrated.
         uint256 shares = _convertToShares(assets);
 
-        // Bridge the backing to Migration Manager on Layer X.
+        // Bridge the backing to yeToken on Layer X.
         if ($._underlyingTokenIsNotMintable) {
             // If the underlying token is not mintable by LxLy Bridge, we need to check for a transfer fee.
-            uint256 previousBalance = $.underlyingToken.balanceOf(address($.lxlyBridge));
-            $.lxlyBridge.bridgeAsset($.layerXLxlyId, $.migrationManager, assets, address($.underlyingToken), true, "");
-            assets = $.underlyingToken.balanceOf(address($.lxlyBridge)) - previousBalance;
+            uint256 balanceBefore = $.underlyingToken.balanceOf(address($.lxlyBridge));
+            $.lxlyBridge.bridgeAsset($.layerXLxlyId, $.yeToken, assets, address($.underlyingToken), true, "");
+            assets = $.underlyingToken.balanceOf(address($.lxlyBridge)) - balanceBefore;
         } else {
             // If the underlying token is mintable by LxLy Bridge, it gets burned and there is no transfer fee.
-            $.lxlyBridge.bridgeAsset($.layerXLxlyId, $.migrationManager, assets, address($.underlyingToken), true, "");
+            $.lxlyBridge.bridgeAsset($.layerXLxlyId, $.yeToken, assets, address($.underlyingToken), true, "");
         }
 
-        // Bridge a message to Migration Manager on Layer X to complete the migration.
+        // Bridge a message to yeToken on Layer X to complete the migration.
         $.lxlyBridge.bridgeMessage(
-            $.layerXLxlyId,
-            $.migrationManager,
-            true,
-            abi.encode(CrossNetworkInstruction.COMPLETE_MIGRATION, shares, assets)
+            $.layerXLxlyId, $.yeToken, true, abi.encode(CrossNetworkInstruction.COMPLETE_MIGRATION, shares, assets)
         );
 
         // Emit the event.
@@ -580,9 +576,9 @@ abstract contract NativeConverter is
         NativeConverterStorage storage $ = _getNativeConverterStorage();
 
         // Transfer the underlying token.
-        uint256 previousBalance = $.underlyingToken.balanceOf(address(this));
+        uint256 balanceBefore = $.underlyingToken.balanceOf(address(this));
         $.underlyingToken.safeTransferFrom(from, address(this), value);
-        receivedValue = $.underlyingToken.balanceOf(address(this)) - previousBalance;
+        receivedValue = $.underlyingToken.balanceOf(address(this)) - balanceBefore;
     }
 
     /// @notice Transfers the underlying token to an external account.
