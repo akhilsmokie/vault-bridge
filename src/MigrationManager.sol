@@ -112,6 +112,7 @@ contract MigrationManager is
         // Initialize the inherited contracts.
         __AccessControl_init();
         __Pausable_init();
+        __ReentrancyGuard_init();
 
         // Grant the basic roles.
         _grantRole(DEFAULT_ADMIN_ROLE, owner_);

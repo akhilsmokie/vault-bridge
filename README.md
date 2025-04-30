@@ -85,15 +85,17 @@ forge coverage --ir-minimum --report lcov && genhtml -o coverage lcov.info
 
 ## License
 ​
-Licensed under either of
+Dual License Notice
 
-- Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+This codebase is licensed under a dual license model:
 
-at your option.
+1. **Open Attribution License** – this license is similar to the MIT License and permits broad 
+use (including for commercial purposes), but is only available when the codebase is used in 
+connection with cryptoasset deposits into the Agglayer’s unified LxLy bridge. See: [LICENSE-OPEN LICENSE](<LICENSE-OPEN LICENSE>)
 
-Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
+2. **Source Available License** – for all other use cases, including cryptoasset deposits into 
+elsewhere than the Agglayer’s unified LxLy bridge, you may use the codebase under the Source 
+Available License. See: [LICENSE-SOURCE AVAILABLE LICENSE](<LICENSE-SOURCE AVAILABLE LICENSE>)
 
----
-
-© 2025 PT Services DMCC
+Your use of this software constitutes acceptance of these license terms. If you are unsure whether
+your use qualifies under the Open Attribution license, please contact: legal@polygon.technology.

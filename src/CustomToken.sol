@@ -87,6 +87,7 @@ abstract contract CustomToken is
         __ERC20Permit_init(name_);
         __AccessControl_init();
         __Pausable_init();
+        __ReentrancyGuard_init();
 
         // Grant the basic roles.
         _grantRole(DEFAULT_ADMIN_ROLE, owner_);

@@ -23,12 +23,14 @@ contract VaultBridgeTokenInitializer is IVaultBridgeTokenInitializer, VaultBridg
     // Libraries.
     using SafeERC20 for IERC20;
 
+    // @remind Document.
     address immutable self;
 
     constructor() {
         self = address(this);
     }
 
+    // @remind Document.
     modifier onlyDelegateCall() {
         require(address(this) != self, "Not delegate call");
         _;
