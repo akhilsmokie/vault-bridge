@@ -10,8 +10,8 @@ Vault Bridge Token is the core of the Vault Bridge protocol. Built from the grou
 The Vault Bridge protocl is comprised of:
 
 - Layer X (the main network)
-  - [Vault Bridge Token](#vault-bridged-token-)
-  - [Migration Manager (singleton)](#migration-manager-)
+  - [Vault Bridge Token](#vault-bridge-token-)
+  - [Migration Manager (singleton)](#migration-manager-singleton-)
 - Layer Y (other networks)
   - [Custom Token](#custom-token-)
   - [Native Converter](#native-converter-)
@@ -30,7 +30,7 @@ enabling bridging of select assets, such as WBTC, WETH, USDT, USDC, and USDS, wh
 
 The Migration Manager is a
 
-- [Vault Bridge Token](#vault-bridged-token-) dependency
+- [Vault Bridge Token](#vault-bridge-token-) dependency
 
 handling migration of backing from Native Converters.
 
@@ -98,4 +98,4 @@ elsewhere than the Agglayer’s unified LxLy bridge, you may use the codebase un
 Available License. See: [LICENSE-SOURCE AVAILABLE LICENSE](<LICENSE-SOURCE AVAILABLE LICENSE>)
 
 Your use of this software constitutes acceptance of these license terms. If you are unsure whether
-your use qualifies under the Open Attribution license, please contact: legal@polygon.technology.
+your use qualifies under the Open Attribution license, please contact: legal@polygon.technology
