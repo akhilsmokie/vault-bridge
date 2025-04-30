@@ -84,8 +84,6 @@ forge coverage --ir-minimum --report lcov && genhtml -o coverage lcov.info
 ```
 
 ## License
-​
-Dual License Notice
 
 This codebase is licensed under a dual license model:
 
@@ -93,7 +91,7 @@ This codebase is licensed under a dual license model:
 use (including for commercial purposes), but is only available when the codebase is used in 
 connection with cryptoasset deposits into the Agglayer’s unified LxLy bridge. See: [LICENSE-OPEN LICENSE](<LICENSE-OPEN LICENSE>)
 
-2. **Source Available License** – for all other use cases, including cryptoasset deposits into 
+1. **Source Available License** – for all other use cases, including cryptoasset deposits into 
 elsewhere than the Agglayer’s unified LxLy bridge, you may use the codebase under the Source 
 Available License. See: [LICENSE-SOURCE AVAILABLE LICENSE](<LICENSE-SOURCE AVAILABLE LICENSE>)
 
