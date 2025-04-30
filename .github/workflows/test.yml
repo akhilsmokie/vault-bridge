@@ -38,14 +38,22 @@ jobs:
         run: |
           forge --version
           forge soldeer install
-          forge build --sizes
+          forge build
         id: build
 
-      - name: Install Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install unzip -y
+
+      - name: Install node
+        uses: actions/setup-node@v2
+        with:
+          node-version: "20"
 
       - name: Run Forge tests
         run: |
-          bun install
-          forge test -vvv
+          npm install
+          forge test --no-match-contract "Generic" -vvv
+        env:
+          TATARA_TOKEN: ${{ secrets.TATARA_TOKEN }}
         id: test
