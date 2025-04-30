@@ -132,11 +132,11 @@ contract MigrationManagerTest is Test {
         vm.startPrank(owner);
 
         // test mismatched inputs: layerYLxlyIds
-        vm.expectRevert(MigrationManager.MismatchedInputsLengths.selector);
+        vm.expectRevert(MigrationManager.NonMatchingInputLengths.selector);
         migrationManager.configureNativeConverters(new uint32[](2), nativeConverters, address(vbToken));
 
         // test mismatched inputs: nativeConverters
-        vm.expectRevert(MigrationManager.MismatchedInputsLengths.selector);
+        vm.expectRevert(MigrationManager.NonMatchingInputLengths.selector);
         migrationManager.configureNativeConverters(layerYLxlyIds, new address[](2), address(vbToken));
 
         // test invalid layerYLxlyId
@@ -224,8 +224,9 @@ contract MigrationManagerTest is Test {
         vm.expectRevert(MigrationManager.Unauthorized.selector);
         migrationManager.onMessageReceived(nativeConverter, NETWORK_ID_Y, bytes(""));
 
-        bytes memory data =
-            abi.encode(MigrationManager.CrossNetworkInstruction.WRAP_COIN_AND_COMPLETE_MIGRATION, abi.encode(100, 100));
+        bytes memory data = abi.encode(
+            MigrationManager.CrossNetworkInstruction.WRAP_GAS_TOKEN_AND_COMPLETE_MIGRATION, abi.encode(100, 100)
+        );
 
         // test unset vbToken
         vm.expectRevert(MigrationManager.Unauthorized.selector);
@@ -237,7 +238,7 @@ contract MigrationManagerTest is Test {
 
         // test unwrapped native token
         vm.prank(address(lxlyBridge));
-        vm.expectRevert(MigrationManager.CannotWrapCoin.selector);
+        vm.expectRevert(MigrationManager.CannotWrapGasToken.selector);
         migrationManager.onMessageReceived(nativeConverter, NETWORK_ID_Y, data);
 
         // test wrapped native token with insufficient balance (balance does not match after receiving native token)
@@ -274,8 +275,9 @@ contract MigrationManagerTest is Test {
 
         deal(address(lxlyBridge), 100);
 
-        bytes memory data =
-            abi.encode(MigrationManager.CrossNetworkInstruction.WRAP_COIN_AND_COMPLETE_MIGRATION, abi.encode(100, 100));
+        bytes memory data = abi.encode(
+            MigrationManager.CrossNetworkInstruction.WRAP_GAS_TOKEN_AND_COMPLETE_MIGRATION, abi.encode(100, 100)
+        );
 
         vm.prank(address(lxlyBridge));
         (bool success,) = address(migrationManager).call{value: 100}(
@@ -295,7 +297,7 @@ contract MigrationManagerTest is Test {
     function _initialize(address _migrationManagerImpl, address _owner, address _lxlyBridge) internal {
         bytes memory migrationManagerInitData = abi.encodeCall(MigrationManager.initialize, (_owner, _lxlyBridge));
         migrationManager =
-            MigrationManager(_proxify(address(_migrationManagerImpl), address(this), migrationManagerInitData));
+            MigrationManager(payable(_proxify(address(_migrationManagerImpl), address(this), migrationManagerInitData)));
     }
 
     function _testPauseUnpause(address caller, address callee, bytes memory callData) internal {

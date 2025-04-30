@@ -506,6 +506,20 @@ contract GenericVaultBridgeTokenTest is Test {
         );
         vbToken.withdraw(amount + 1, sender, sender);
 
+        uint256 withdrawAmount = vbToken.stakedAssets();
+        // slippage amount is set to 1.1% of the max withdraw amount since 1% is allowed
+        uint256 slippageAmount = Math.mulDiv(withdrawAmount, 0.011e18, 1e18);
+        vbTokenVault.setSlippage(true, slippageAmount);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                VaultBridgeToken.ExcessiveYieldVaultSharesBurned.selector,
+                withdrawAmount + slippageAmount,
+                withdrawAmount
+            )
+        );
+        vbToken.withdraw(amount, sender, sender); // 90 ETH from reserve and 10 ETH from vault
+
         vm.stopPrank();
     }
 
@@ -548,13 +562,12 @@ contract GenericVaultBridgeTokenTest is Test {
 
         uint256 amountToWithdraw = amount;
 
-        // @todo disabled till the check (VaultBridgeToken.sol#L1319) is fixed
-        // vm.expectEmit();
-        // emit IERC4626.Withdraw(sender, sender, sender, amountToWithdraw, amountToWithdraw);
-        // vbToken.withdraw(amountToWithdraw, sender, sender);
-        // assertEq(IERC20(asset).balanceOf(address(vbToken)), 0); // reserve assets reduced
-        // assertEq(IERC20(asset).balanceOf(sender), amountToWithdraw); // assets returned to sender
-        // assertEq(vbToken.balanceOf(sender), amount - amountToWithdraw); // shares reduced
+        vm.expectEmit();
+        emit IERC4626.Withdraw(sender, sender, sender, amountToWithdraw, amountToWithdraw);
+        vbToken.withdraw(amountToWithdraw, sender, sender);
+        assertEq(IERC20(asset).balanceOf(address(vbToken)), 0); // reserve assets reduced
+        assertEq(IERC20(asset).balanceOf(sender), amountToWithdraw); // assets returned to sender
+        assertEq(vbToken.balanceOf(sender), amount - amountToWithdraw); // shares reduced
         vm.stopPrank();
     }
 
@@ -593,14 +606,13 @@ contract GenericVaultBridgeTokenTest is Test {
 
         uint256 finalReserveAmount = totalSupply * minimumReservePercentage / MAX_MINIMUM_RESERVE_PERCENTAGE;
         uint256 finalPercentage = finalReserveAmount * 1e18 / totalSupply;
-        // @todo disabled till the check (VaultBridgeToken.sol#L1319) is fixed
-        // vm.expectEmit();
-        // emit VaultBridgeToken.ReserveRebalanced(reserveAmount - 100, finalReserveAmount, finalPercentage);
-        // vm.prank(owner);
-        // vbToken.rebalanceReserve();
+        vm.expectEmit();
+        emit VaultBridgeToken.ReserveRebalanced(reserveAmount - 100, finalReserveAmount, finalPercentage);
+        vm.prank(owner);
+        vbToken.rebalanceReserve();
 
-        // assertEq(vbToken.reservedAssets(), finalReserveAmount);
-        // assertGt(stakedAssetsBefore, vbToken.stakedAssets()); // staked assets would be reduced as reserve is replinished from the vault
+        assertEq(vbToken.reservedAssets(), finalReserveAmount);
+        assertGt(stakedAssetsBefore, vbToken.stakedAssets()); // staked assets would be reduced as reserve is replinished from the vault
     }
 
     function test_rebalanceReserve_above() public virtual {
@@ -763,24 +775,16 @@ contract GenericVaultBridgeTokenTest is Test {
 
         uint256 finalPercentage = finalReserveAmount * 1e18 / userDepositAmount;
 
-        // @todo disabled till the check (VaultBridgeToken.sol#L1319) is fixed
-        // vm.expectEmit();
-        // emit VaultBridgeToken.ReserveRebalanced(reserveAmount, finalReserveAmount, finalPercentage);
-        // vm.expectEmit();
-        // emit VaultBridgeToken.MinimumReservePercentageSet(newPercentage);
-        // vm.prank(owner);
-        // vbToken.setMinimumReservePercentage(newPercentage);
-
-        // assertEq(vbToken.minimumReservePercentage(), newPercentage);
-        // assertEq(vbToken.reservedAssets(), finalReserveAmount);
-        // assertLt(vbToken.stakedAssets(), stakedAssetsBefore);
-    }
-
-    function testFuzz_setMinimumReservePercentage(uint256 percentage) public {
-        vm.assume(percentage <= MAX_MINIMUM_RESERVE_PERCENTAGE);
+        vm.expectEmit();
+        emit VaultBridgeToken.ReserveRebalanced(reserveAmount, finalReserveAmount, finalPercentage);
+        vm.expectEmit();
+        emit VaultBridgeToken.MinimumReservePercentageSet(newPercentage);
         vm.prank(owner);
-        vbToken.setMinimumReservePercentage(percentage);
-        assertEq(vbToken.minimumReservePercentage(), percentage);
+        vbToken.setMinimumReservePercentage(newPercentage);
+
+        assertEq(vbToken.minimumReservePercentage(), newPercentage);
+        assertEq(vbToken.reservedAssets(), finalReserveAmount);
+        assertLt(vbToken.stakedAssets(), stakedAssetsBefore);
     }
 
     function test_redeem_revert() public {
@@ -806,15 +810,12 @@ contract GenericVaultBridgeTokenTest is Test {
 
         uint256 redeemAmount = vbToken.totalAssets();
 
-        // @todo disabled till the check (VaultBridgeToken.sol#L1319) is fixed
-        // vbToken.redeem(redeemAmount, sender, sender); // redeem from both staked and reserved assets
-        // assertEq(IERC20(asset).balanceOf(sender), redeemAmount);
+        vbToken.redeem(redeemAmount, sender, sender); // redeem from both staked and reserved assets
+        assertEq(IERC20(asset).balanceOf(sender), redeemAmount);
         vm.stopPrank();
     }
 
     function test_completeMigration_revert() public {
-        uint256 assets = 100 ether;
-        uint256 shares = 100 ether;
         bytes memory callData = abi.encodeWithSelector(vbToken.completeMigration.selector, address(0), 0, 0);
         _testPauseUnpause(owner, address(vbToken), callData);
 

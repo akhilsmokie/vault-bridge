@@ -30,26 +30,6 @@ contract MockVbToken is VaultBridgeToken {
     function version() external pure virtual returns (string memory) {
         return "1.0.0";
     }
-
-    function _assetsAfterTransferFee(uint256 assetsBeforeTransferFee)
-        internal
-        view
-        virtual
-        override
-        returns (uint256)
-    {
-        return assetsBeforeTransferFee;
-    }
-
-    function _assetsBeforeTransferFee(uint256 minimumAssetsAfterTransferFee)
-        internal
-        view
-        virtual
-        override
-        returns (uint256)
-    {
-        return minimumAssetsAfterTransferFee;
-    }
 }
 
 contract MockNativeConverter is NativeConverter {
@@ -241,7 +221,6 @@ contract IntegrationTest is Test, ZkEVMCommon {
     // extra contracts
     TestVault vbTokenVault;
     MockNativeConverter nativeConverter;
-    VaultBridgeToken.NativeConverterConfiguration[] nativeConverterStruct;
     MigrationManager migrationManager;
 
     // dummy addresses
@@ -373,7 +352,7 @@ contract IntegrationTest is Test, ZkEVMCommon {
         MigrationManager migrationManagerImpl = new MigrationManager();
         bytes memory migrationManagerInitData = abi.encodeCall(MigrationManager.initialize, (owner, LXLY_BRIDGE_X));
         migrationManager =
-            MigrationManager(_proxify(address(migrationManagerImpl), address(this), migrationManagerInitData));
+            MigrationManager(payable(_proxify(address(migrationManagerImpl), address(this), migrationManagerInitData)));
         vm.prank(owner);
         migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, address(vbToken));
         assertEq(migrationManagerAddr, address(migrationManager));
@@ -438,13 +417,6 @@ contract IntegrationTest is Test, ZkEVMCommon {
         nativeConverter =
             MockNativeConverter(_proxify(address(nativeConverter), address(this), nativeConverterInitData));
         assertEq(nativeConverterAddr, address(nativeConverter));
-
-        nativeConverterStruct.push(
-            VaultBridgeToken.NativeConverterConfiguration({
-                layerYLxlyId: layerYLxlyIds[0],
-                nativeConverter: nativeConverters[0]
-            })
-        );
 
         //////////////////////////////////////////////////////////////
         // Layer X
@@ -526,74 +498,6 @@ contract IntegrationTest is Test, ZkEVMCommon {
         _mapTokenLayerYToLayerX(address(vbToken), address(customToken), false);
         _claimAndVerifyAssetLayerY(customToken, claimPayload);
     }
-
-    // @     review
-    // function test_claimAndRedeem_bridgeWrappedMapping() public {
-    //     uint256 depositAmount = 1000;
-
-    //     vm.selectFork(forkIdLayerX);
-
-    //     // create backing on the bridge on layer X
-    //     deal(address(underlyingAsset), sender, depositAmount);
-    //     LeafPayload memory depositLeaf = LeafPayload({
-    //         leafType: LEAF_TYPE_ASSET,
-    //         originNetwork: NETWORK_ID_X,
-    //         originAddress: address(vbToken),
-    //         destinationNetwork: NETWORK_ID_Y,
-    //         destinationAddress: recipient,
-    //         amount: depositAmount,
-    //         metadata: vbTokenMetaData
-    //     });
-    //     _depositAndBridgeLayerX(sender, depositAmount, depositLeaf);
-    //     bytes32 lastLayerXExitRoot = IPolygonZkEVMGlobalExitRoot(GER_X).lastMainnetExitRoot();
-
-    //     vm.selectFork(forkIdLayerY);
-
-    //     uint256 withdrawAmount = 100;
-
-    //     _mapTokenLayerYToLayerX(address(vbToken), address(bwVbToken), false); // map the bridge wrapped vbToken to the vbToken (simulating the natural bridging process, no need in real life)
-    //     deal(address(bwVbToken), sender, withdrawAmount);
-
-    //     vm.startPrank(sender);
-    //     bwVbToken.approve(LXLY_BRIDGE_Y, withdrawAmount);
-
-    //     LeafPayload memory withdrawLeaf = LeafPayload({
-    //         leafType: LEAF_TYPE_ASSET,
-    //         originNetwork: NETWORK_ID_X,
-    //         originAddress: address(vbToken),
-    //         destinationNetwork: NETWORK_ID_X,
-    //         destinationAddress: address(vbToken),
-    //         amount: withdrawAmount,
-    //         metadata: bwVbTokenMetaData
-    //     });
-
-    //     // bridge the bridge wrapped vbToken
-    //     vm.expectEmit();
-    //     emit BridgeEvent(
-    //         withdrawLeaf.leafType,
-    //         withdrawLeaf.originNetwork,
-    //         withdrawLeaf.originAddress,
-    //         withdrawLeaf.destinationNetwork,
-    //         withdrawLeaf.destinationAddress,
-    //         withdrawLeaf.amount,
-    //         withdrawLeaf.metadata,
-    //         _ILxLyBridge(LXLY_BRIDGE_Y).depositCount()
-    //     );
-    //     ILxLyBridge(LXLY_BRIDGE_Y).bridgeAsset(
-    //         NETWORK_ID_X, address(vbToken), withdrawAmount, address(bwVbToken), true, ""
-    //     );
-
-    //     assertEq(bwVbToken.balanceOf(LXLY_BRIDGE_Y), 0); // underlying asset is burned as it is custom mapped to vbToken
-    //     vm.stopPrank();
-
-    //     LeafPayload[] memory leafPayloads = new LeafPayload[](1);
-    //     leafPayloads[0] = withdrawLeaf;
-    //     ClaimPayload[] memory withdrawClaimPayload = _getClaimPayloadsLayerY(leafPayloads, lastLayerXExitRoot);
-
-    //     vm.selectFork(forkIdLayerX);
-
-    //     _claimAndRedeemLayerXAndVerify(withdrawClaimPayload[0]);
-    // }
 
     // Add test for not being able to withdraw the needed amount from external vault
     // Add another test where vault maxWithdraw works
