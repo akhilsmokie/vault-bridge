@@ -1,7 +1,6 @@
 //
 pragma solidity ^0.8.29;
 
-import {GenericVaultBridgeToken} from "src/vault-bridge-tokens/GenericVaultBridgeToken.sol";
 import {VaultBridgeToken} from "src/VaultBridgeToken.sol";
 import {USDTTransferFeeCalculator} from "src/vault-bridge-tokens/vbUSDT/USDTTransferFeeCalculator.sol";
 
