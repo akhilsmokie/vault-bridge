@@ -198,18 +198,12 @@ contract VbETHTest is GenericVaultBridgeTokenTest {
         uint256 amountToWithdraw = amount - 1;
         uint256 initialBalance = IWETH9(WETH).balanceOf(address(this));
 
-        // @todo disabled till the check (VaultBridgeToken.sol#L1319) is fixed
-        // vm.expectEmit();
-        // emit IERC4626.Withdraw(address(this), address(this), address(this), amountToWithdraw, amountToWithdraw);
-        // vbToken.withdraw(amountToWithdraw, address(this), address(this));
-        // assertEq(IWETH9(WETH).balanceOf(address(vbETH)), 0); // reserve assets reduced
-        // assertEq(IWETH9(WETH).balanceOf(address(this)), initialBalance + amountToWithdraw); // assets returned to sender
-        // assertEq(vbETH.balanceOf(address(this)), amount - amountToWithdraw); // shares reduced
-    }
-
-    function test_rebalanceReserve_above() public override {
-        // @todo Find a way to test this
-        // Disabled due to external vault slippage on deposit
+        vm.expectEmit();
+        emit IERC4626.Withdraw(address(this), address(this), address(this), amountToWithdraw, amountToWithdraw);
+        vbToken.withdraw(amountToWithdraw, address(this), address(this));
+        assertEq(IWETH9(WETH).balanceOf(address(vbETH)), 0); // reserve assets reduced
+        assertEq(IWETH9(WETH).balanceOf(address(this)), initialBalance + amountToWithdraw); // assets returned to sender
+        assertEq(vbETH.balanceOf(address(this)), amount - amountToWithdraw); // shares reduced
     }
 
     function test_completeMigration_CUSTOM_no_discrepancy() public {
