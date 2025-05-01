@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+//
 pragma solidity 0.8.29;
 
 import {VbETH} from "src/vault-bridge-tokens/vbETH/VbETH.sol";
