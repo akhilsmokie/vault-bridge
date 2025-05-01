@@ -2,7 +2,6 @@
 src = "src"
 out = "out"
 libs = ["dependencies"]
-test = ".test"
 via-ir = true
 verbosity = 2
 ffi = true
