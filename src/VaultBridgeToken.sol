@@ -1134,7 +1134,11 @@ abstract contract VaultBridgeToken is
 
         uint256 maxShares = $.yieldVault.maxRedeem(address(this));
 
-        if (exact) require(shares <= maxShares, YieldVaultRedemptionFailed(shares, maxShares));
+        if (exact) {
+            require(shares <= maxShares, YieldVaultRedemptionFailed(shares, maxShares));
+        } else {
+            if (shares > maxShares) shares = maxShares;
+        }
 
         uint256 balanceBefore = $.underlyingToken.balanceOf(address(this));
 
@@ -1147,10 +1151,11 @@ abstract contract VaultBridgeToken is
         $.reservedAssets += receivedAssets;
 
         // Redeeming all shares at this exchange rate would need to give enough assets to back the total supply of vbToken together with the reserved assets. Allows for 1% slippage.
-        // Does not check uncollected yield to relax the condition a bit. Instead, yield can be collected manually before calling this function, if the admint so desires.
+        // Does not check uncollected yield to relax the condition a bit. Instead, yield can be collected manually before calling this function, if the yield collector wishes to do so.
         require(
             Math.mulDiv(originalYieldVaultSharesBalance, _assetsBeforeTransferFee(receivedAssets), shares)
-                >= Math.mulDiv(convertToAssets(originalTotalSupply) - originalReservedAssets, 0.99e18, 1e18)
+                >= Math.mulDiv(convertToAssets(originalTotalSupply) - originalReservedAssets, 0.99e18, 1e18),
+            ExcessiveYieldVaultSharesBurned(shares, receivedAssets)
         );
 
         emit YieldVaultDrained(shares, receivedAssets);
