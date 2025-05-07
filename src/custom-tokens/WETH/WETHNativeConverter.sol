@@ -4,7 +4,7 @@ pragma solidity 0.8.29;
 // @todo REVIEW.
 
 // @todo Remove `SafeERC20`, `IERC20`. (Required for the reinitializer).
-import {NativeConverter, SafeERC20, IERC20} from "../../NativeConverter.sol";
+import {NativeConverter, Math, SafeERC20, IERC20} from "../../NativeConverter.sol";
 import {WETH} from "./WETH.sol";
 import {IVersioned} from "../../etc/IVersioned.sol";
 import {MigrationManager} from "../../MigrationManager.sol";
@@ -109,6 +109,15 @@ contract WETHNativeConverter is NativeConverter {
     }
     */
 
+    function migratableGasBacking() public view returns (uint256) {
+        uint256 nonMigratableGasBacking =
+            _convertToAssets(Math.mulDiv(customToken().totalSupply(), nonMigratableBackingPercentage(), 1e18));
+
+        uint256 gasBalance = address(customToken()).balance;
+
+        return gasBalance > nonMigratableGasBacking ? gasBalance - nonMigratableGasBacking : 0;
+    }
+
     /// @dev This special function allows the NativeConverter owner to migrate the gas backing of the WETH Custom Token
     /// @dev It simply takes the amount of gas token from the WETH contract
     /// @dev and performs the migration using a special CrossNetworkInstruction called WRAP_GAS_TOKEN_AND_COMPLETE_MIGRATION
@@ -130,9 +139,7 @@ contract WETHNativeConverter is NativeConverter {
 
         // Check the input.
         require(amount > 0, InvalidAssets());
-        // @follow-up Consider implementing a better limit.
-        require(amount <= migratableBacking_, AssetsTooLarge(migratableBacking_, amount));
-        require(amount <= address(weth).balance, AssetsTooLarge(address(weth).balance, amount));
+        require(amount <= migratableGasBacking(), AssetsTooLarge(migratableBacking_, amount));
 
         // Precalculate the amount of Custom Token for which backing is being migrated.
         uint256 amountOfCustomToken = _convertToShares(amount);
@@ -158,7 +165,7 @@ contract WETHNativeConverter is NativeConverter {
         emit MigrationStarted(msg.sender, amountOfCustomToken, amount);
     }
 
-    receive() external payable whenNotPaused onlyIfGasTokenIsEth nonReentrant {}
+    receive() external payable whenNotPaused onlyIfGasTokenIsEth {}
 
     /// @inheritdoc IVersioned
     function version() external pure virtual returns (string memory) {
