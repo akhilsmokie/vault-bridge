@@ -85,6 +85,7 @@ abstract contract CustomToken is
         // Initialize the inherited contracts.
         __ERC20_init(name_, symbol_);
         __ERC20Permit_init(name_);
+        __Nonces_init();
         __AccessControl_init();
         __Pausable_init();
         __ReentrancyGuard_init();

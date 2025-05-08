@@ -61,16 +61,14 @@ contract VbETH is VaultBridgeToken {
         require(mintedShares == shares, IncorrectAmountOfSharesMinted(mintedShares, shares));
     }
 
-    function _receiveUnderlyingToken(address, uint256 assets) internal override returns (uint256) {
+    function _receiveUnderlyingToken(address, uint256 assets) internal override {
         IWETH9 weth = IWETH9(address(underlyingToken()));
 
         if (msg.value > 0) {
             // deposit everything, excess funds will be refunded in WETH
             weth.deposit{value: msg.value}();
-            return msg.value;
         } else {
             weth.safeTransferFrom(msg.sender, address(this), assets);
-            return assets;
         }
     }
 

@@ -1,6 +1,8 @@
 //
 pragma solidity 0.8.29;
 
+// @remind UPDATE DOCUMENTATION.
+
 // Main functionality.
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {ERC20PermitUpgradeable} from
@@ -13,7 +15,6 @@ import {AccessControlUpgradeable} from "@openzeppelin-contracts-upgradeable/acce
 import {PausableUpgradeable} from "@openzeppelin-contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin-contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import {ERC20PermitUser} from "./etc/ERC20PermitUser.sol";
-import {ITransferFeeCalculator} from "./ITransferFeeCalculator.sol";
 import {IVersioned} from "./etc/IVersioned.sol";
 
 // Libraries.
@@ -31,8 +32,8 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 /// @title Vault Bridge Token
 /// @notice A vbToken is an ERC-20 token, ERC-4626 vault, and LxLy Bridge extension, enabling deposits and bridging of select assets, such as WBTC, WETH, USDT, USDC, and USDS, while producing yield.
 /// @dev A base contract used to create vault bridge tokens.
-/// @dev @note IMPORTANT: In order to not drive the complexity of the Vault Bridge protocol up, vbToken MUST NOT have transfer, deposit, or withdrawal fees. The underlying token on Layer X, and the underlying token and Custom Token on Layer Ys MAY have transfer fees. The yield vault SHOULD NOT have deposit and/or withdrawal fees, and the price of its shares MUST NOT decrease (e.g., does not realize bad debt); still, this contract implements solvency checks for protection. The underlying token MUST NOT be a rebasing token, and MUST NOT have transfer hooks (i.e., does not enable reentrancy/cross-entrancy).
-/// @dev It is expected that generated yield will offset any costs incurred when transferring the underlying token to and from the yield vault, or depositing to and withdrawing from the yield vault for the purpose of generating yield or rebalancing the internal reserve.
+/// @dev @note IMPORTANT: In order to not drive the complexity of the Vault Bridge protocol up, vbToken MUST NOT have transfer, deposit, or withdrawal fees. The underlying token on Layer X MUST NOT have a transfer fee; the contract will revert if a transfer fee is detected. The underlying token and Custom Token on Layer Ys MAY have transfer fees. The yield vault SHOULD NOT have deposit and/or withdrawal fees, and the price of its shares MUST NOT decrease (e.g., the vault does not realize bad debt); still, this contract implements solvency checks for protection. Additionally, the underlying token MUST NOT be a rebasing token, and MUST NOT have transfer hooks (i.e., the token does not enable reentrancy/cross-entrancy).
+/// @dev It is expected that generated yield will offset any costs incurred when depositing to and withdrawing from the yield vault for the purpose of generating yield or rebalancing the internal reserve.
 abstract contract VaultBridgeToken is
     Initializable,
     AccessControlUpgradeable,
@@ -63,8 +64,8 @@ abstract contract VaultBridgeToken is
         mapping(uint32 layerYLxlyId => address nativeConverter) __OUTDATED__nativeConverters;
         uint256 migrationFeesFund;
         uint256 minimumYieldVaultDeposit;
-        ITransferFeeCalculator transferFeeCalculator;
         address migrationManager;
+        uint256 yieldVaultAllowedSlippagePercentage;
     }
 
     /// @remind Document.
@@ -85,8 +86,8 @@ abstract contract VaultBridgeToken is
         address yieldRecipient;
         address lxlyBridge;
         uint256 minimumYieldVaultDeposit;
-        address transferFeeCalculator;
         address migrationManager;
+        uint256 yieldVaultAllowedSlippagePercentage;
     }
 
     // Basic roles.
@@ -112,6 +113,7 @@ abstract contract VaultBridgeToken is
     error InvalidYieldRecipient();
     error InvalidLxLyBridge();
     error InvalidMigrationManager();
+    error InvalidYieldVaultAllowedSlippagePercentage();
     error InitializationFailed();
     error InvalidAssets();
     error InvalidDestinationNetworkId();
@@ -129,8 +131,10 @@ abstract contract VaultBridgeToken is
     error YieldVaultRedemptionFailed(uint256 sharesToRedeem, uint256 redemptionLimit);
     error YieldVaultDepositFailed(uint256 assetsToDeposit, uint256 depositLimit);
     error InsufficientYieldVaultSharesMinted(uint256 depositedAssets, uint256 mintedShares);
+    error UnknownError(bytes data);
     error YieldVaultWithdrawalFailed(uint256 assetsToWithdraw, uint256 withdrawalLimit);
     error ExcessiveYieldVaultSharesBurned(uint256 burnedShares, uint256 withdrawnAssets);
+    error InsufficientUnderlyingTokenReceived(uint256 receivedAssets, uint256 requestedAssets);
 
     // Events.
     event ReserveRebalanced(uint256 oldReservedAssets, uint256 newReservedAssets, uint256 reservePercentage);
@@ -141,15 +145,16 @@ abstract contract VaultBridgeToken is
     event MigrationCompleted(
         uint32 indexed destinationNetworkId,
         uint256 indexed shares,
-        uint256 assetsBeforeTransferFees,
-        uint256 assets,
-        uint256 usedYield
+        uint256 indexed assets,
+        uint256 migrationFeesFundUtilization
     );
     event YieldRecipientSet(address indexed yieldRecipient);
     event TransferFeeCalculatorSet(address transferFeeCalculator);
     event MinimumReservePercentageSet(uint256 minimumReservePercentage);
     event YieldVaultDrained(uint256 redeemedShares, uint256 receivedAssets);
     event YieldVaultSet(address yieldVault);
+    event YieldVaultSafetyModeSet(bool safetyMode);
+    event YieldVaultAllowedSlippagePercentageSet(uint256 slippagePercentage);
 
     /// @dev Checks if the sender is the yield recipient.
     modifier onlyYieldRecipient() {
@@ -169,6 +174,13 @@ abstract contract VaultBridgeToken is
     modifier onlyMigrationManager() {
         VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
         require(msg.sender == $.migrationManager, Unauthorized());
+        _;
+    }
+
+    /// @dev Checks if the sender is the vbToken itself.
+    modifier onlySelf() {
+        VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
+        require(msg.sender == address(this), Unauthorized());
         _;
     }
 
@@ -265,19 +277,16 @@ abstract contract VaultBridgeToken is
         return $.minimumYieldVaultDeposit;
     }
 
-    // @remind Redocument.
-    /// @notice The address of the dedicated fee calculator for covering the underlying token's transfer fees.
-    /// @notice If the underlying token does not have a transfer fee, this address is set to address(0).
-    /// @return Returns the address of the dedicated fee calculator for covering the underlying token's transfer fees.
-    function transferFeeCalculator() public view returns (ITransferFeeCalculator) {
-        VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
-        return $.transferFeeCalculator;
-    }
-
     // @remind Document.
     function migrationManager() public view returns (address) {
         VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
         return $.migrationManager;
+    }
+
+    // @remind Document.
+    function yieldVaultAllowedSlippagePercentage() public view returns (uint256) {
+        VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
+        return $.yieldVaultAllowedSlippagePercentage;
     }
 
     /// @dev Returns a pointer to the ERC-7201 storage namespace.
@@ -324,7 +333,7 @@ abstract contract VaultBridgeToken is
         // Check the input.
         require(assets > 0, InvalidAssets());
 
-        return convertToShares(_assetsAfterTransferFee(assets));
+        return convertToShares(assets);
     }
 
     /// @notice Deposit a specific amount of the underlying token and mint vbToken.
@@ -368,7 +377,7 @@ abstract contract VaultBridgeToken is
         require(receiver != address(this), InvalidReceiver());
 
         // Transfer the underlying token from the sender to self.
-        assets = _receiveUnderlyingToken(msg.sender, assets);
+        _receiveUnderlyingToken(msg.sender, assets);
 
         // Check for a refund.
         if (maxShares > 0) {
@@ -431,6 +440,14 @@ abstract contract VaultBridgeToken is
 
         // Emit the ERC-4626 event.
         emit IERC4626.Deposit(msg.sender, receiver, assets, shares);
+
+        // @remind Document.
+        uint256 reservePercentage_ = reservePercentage();
+
+        // @remind Document.
+        if (reservePercentage_ > 3 * $.minimumReservePercentage && reservePercentage_ > 0.1e18) {
+            _rebalanceReserve(false, true);
+        }
     }
 
     /// @notice Deposit a specific amount of the underlying token and mint vbToken.
@@ -496,7 +513,7 @@ abstract contract VaultBridgeToken is
         // Check the input.
         require(shares > 0, InvalidShares());
 
-        return _assetsBeforeTransferFee(convertToAssets(shares));
+        return convertToAssets(shares);
     }
 
     /// @notice Mint a specific amount of vbToken by locking the required amount of the underlying token.
@@ -508,8 +525,7 @@ abstract contract VaultBridgeToken is
 
         // Mint vbToken to the receiver.
         uint256 mintedShares;
-        (mintedShares, assets) =
-            _deposit(_assetsBeforeTransferFee(convertToAssets(shares)), $.lxlyId, receiver, false, shares);
+        (mintedShares, assets) = _deposit(convertToAssets(shares), $.lxlyId, receiver, false, shares);
 
         // Check the output.
         require(mintedShares == shares, IncorrectAmountOfSharesMinted(mintedShares, shares));
@@ -892,7 +908,7 @@ abstract contract VaultBridgeToken is
     }
 
     /// @notice Transfers yield generated by the yield vault to the yield recipient in the form of vbToken.
-    /// @notice The reserve will be rebalanced after collecting yield.
+    /// @dev Does not rebalance the reserve after collecting yield to allow usage while the contract is paused.
     /// @param force Whether to revert if no yield can be collected.
     function _collectYield(bool force) internal {
         VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
@@ -912,9 +928,6 @@ abstract contract VaultBridgeToken is
         } else if (force) {
             revert NoYield();
         }
-
-        // Try to rebalance the reserve.
-        _rebalanceReserve(false, true);
     }
 
     /// @notice Burns a specific amount of vbToken.
@@ -950,7 +963,7 @@ abstract contract VaultBridgeToken is
         require(assets > 0, InvalidAssets());
 
         // Transfer the underlying token from the sender to self.
-        assets = _receiveUnderlyingToken(msg.sender, assets);
+        _receiveUnderlyingToken(msg.sender, assets);
 
         // Update the reserve.
         $.reservedAssets += assets;
@@ -977,19 +990,12 @@ abstract contract VaultBridgeToken is
     {
         VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
 
-        // Cache the original `assets`.
-        uint256 assetsBeforeTransferFees = assets;
-
-        // Modify the input.
-        // Accounts for a transfer fee when the `assets` were claimed from LxLy Bridge.
-        assets = _assetsAfterTransferFee(assets);
-
         // Check the inputs.
         require(originNetwork != $.lxlyId, InvalidOriginNetwork());
         require(shares > 0, InvalidShares());
 
         // Transfer the underlying token from the sender to self.
-        assets = _receiveUnderlyingToken(msg.sender, assets);
+        _receiveUnderlyingToken(msg.sender, assets);
 
         // Calculate the discrepancy between the required amount of vbToken (`shares`) and the amount of the underlying token received from LxLy Bridge (`assets`).
         // A discrepancy is possible due to transfer fees of the underlying token. To offset the discrepancy, we mint more vbToken, backed by assets from the dedicated migration fees fund.
@@ -998,15 +1004,16 @@ abstract contract VaultBridgeToken is
         uint256 discrepancy = requiredAssets - assets;
         uint256 assetsInMigrationFund = $.migrationFeesFund;
         if (discrepancy > 0) {
+            // Check if there are enought assets in the migration fees fund to cover the discrepancy.
             require(
                 assetsInMigrationFund >= discrepancy,
                 CannotCompleteMigration(requiredAssets, assets, assetsInMigrationFund)
             );
-        }
 
-        // Move the discrepancy from the migration fees fund to the reserve.
-        $.migrationFeesFund -= discrepancy;
-        $.reservedAssets += discrepancy;
+            // Move the discrepancy from the migration fees fund to the reserve.
+            $.migrationFeesFund -= discrepancy;
+            $.reservedAssets += discrepancy;
+        }
 
         // Calculate the amount to reserve.
         uint256 assetsToReserve = _calculateAmountToReserve(assets, shares);
@@ -1014,14 +1021,20 @@ abstract contract VaultBridgeToken is
         // Calculate the amount to try to deposit into the yield vault.
         uint256 assetsToDeposit = assets - assetsToReserve;
 
-        // Try to deposit into the yield vault.
-        if (assetsToDeposit > 0) {
-            // Deposit, and adjust the reserve if necessary.
-            $.reservedAssets += _depositIntoYieldVault(assetsToDeposit, false);
-        }
+        // Check whether to skip depositing into the yield vault.
+        if (assetsToDeposit >= $.minimumYieldVaultDeposit) {
+            // Try to deposit into the yield vault.
+            if (assetsToDeposit > 0) {
+                // Deposit, and adjust the reserve if necessary.
+                $.reservedAssets += _depositIntoYieldVault(assetsToDeposit, false);
+            }
 
-        // Update the reserve.
-        $.reservedAssets += assetsToReserve;
+            // Update the reserve.
+            $.reservedAssets += assetsToReserve;
+        } else {
+            // Update the reserve.
+            $.reservedAssets += assets;
+        }
 
         // Mint vbToken to self and bridge it to address zero on the origin network.
         // The vbToken will not be claimable on the origin network, but provides liquidity when bridging from Layer Ys to Layer X and increments the pessimistic proof.
@@ -1032,7 +1045,7 @@ abstract contract VaultBridgeToken is
         emit IERC4626.Deposit(msg.sender, address(this), assets, shares);
 
         // Emit the event.
-        emit MigrationCompleted(originNetwork, shares, assetsBeforeTransferFees, assets, discrepancy);
+        emit MigrationCompleted(originNetwork, shares, assets, discrepancy);
     }
 
     /// @notice Adds a specific amount of the underlying token to a dedicated fund for covering the underlying token's transfer fees during a migration by transferring it from the sender. Please refer to `_completeMigration` for more information.
@@ -1043,7 +1056,7 @@ abstract contract VaultBridgeToken is
         require(assets > 0, InvalidAssets());
 
         // Transfer the underlying token from the sender to self.
-        assets = _receiveUnderlyingToken(msg.sender, assets);
+        _receiveUnderlyingToken(msg.sender, assets);
 
         // Update the migration fees fund.
         $.migrationFeesFund += assets;
@@ -1074,25 +1087,6 @@ abstract contract VaultBridgeToken is
 
         // Emit the event.
         emit YieldRecipientSet(yieldRecipient_);
-    }
-
-    // @remind Redocument.
-    /// @notice Sets the transfer fee util address.
-    /// @param transferFeeCalculator_ The address of the transfer fee util contract.
-    /// @notice This function can be called by the owner only.
-    /// @dev No need to check for zero address as the zero address would mean no transfer fee.
-    function setTransferFeeCalculator(ITransferFeeCalculator transferFeeCalculator_)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-        nonReentrant
-    {
-        VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
-
-        // Set the transfer fee calculator.
-        $.transferFeeCalculator = transferFeeCalculator_;
-
-        // Emit the event.
-        emit TransferFeeCalculatorSet(address(transferFeeCalculator_));
     }
 
     /// @notice Sets the minimum reserve percentage.
@@ -1134,11 +1128,11 @@ abstract contract VaultBridgeToken is
 
         uint256 maxShares = $.yieldVault.maxRedeem(address(this));
 
-        if (exact) {
-            require(shares <= maxShares, YieldVaultRedemptionFailed(shares, maxShares));
-        } else {
-            if (shares > maxShares) shares = maxShares;
-        }
+        if (exact) require(shares <= maxShares, YieldVaultRedemptionFailed(shares, maxShares));
+
+        shares = shares > maxShares ? maxShares : shares;
+
+        if (shares == 0) return;
 
         uint256 balanceBefore = $.underlyingToken.balanceOf(address(this));
 
@@ -1150,11 +1144,15 @@ abstract contract VaultBridgeToken is
 
         $.reservedAssets += receivedAssets;
 
-        // Redeeming all shares at this exchange rate would need to give enough assets to back the total supply of vbToken together with the reserved assets. Allows for 1% slippage.
+        // Redeeming all shares at this exchange rate would need to give enough assets to back the total supply of vbToken together with the reserved assets.
         // Does not check uncollected yield to relax the condition a bit. Instead, yield can be collected manually before calling this function, if the yield collector wishes to do so.
         require(
-            Math.mulDiv(originalYieldVaultSharesBalance, _assetsBeforeTransferFee(receivedAssets), shares)
-                >= Math.mulDiv(convertToAssets(originalTotalSupply) - originalReservedAssets, 0.99e18, 1e18),
+            Math.mulDiv(originalYieldVaultSharesBalance, receivedAssets, shares)
+                >= Math.mulDiv(
+                    convertToAssets(originalTotalSupply) - originalReservedAssets,
+                    1e18 - $.yieldVaultAllowedSlippagePercentage,
+                    1e18
+                ),
             ExcessiveYieldVaultSharesBurned(shares, receivedAssets)
         );
 
@@ -1166,6 +1164,8 @@ abstract contract VaultBridgeToken is
     /// @notice This function can be called by the owner only.
     function setYieldVault(address yieldVault_) external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant {
         VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
+
+        // @todo non zero, revoke approval for the old vault.
 
         $.yieldVault = IERC4626(yieldVault_);
 
@@ -1204,12 +1204,16 @@ abstract contract VaultBridgeToken is
         return assetsToReserve <= assets ? assetsToReserve : assets;
     }
 
+    // @remind Redocument.
     /// @notice Deposit a specific amount of the underlying token into the yield vault.
     /// @param assets The amount of the underlying token to deposit into the yield vault.
     /// @param exact @remind Document.
     /// @return nonDepositedAssets The amount of the underlying token that could not be deposited into the yield vault. The value will be zero if `exact` is set to `true`.
     function _depositIntoYieldVault(uint256 assets, bool exact) internal returns (uint256 nonDepositedAssets) {
         VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
+
+        // @remind Document.
+        uint256 originalAssets = assets;
 
         // Get the yield vault's deposit limit.
         // @note Yield vault usage.
@@ -1227,17 +1231,57 @@ abstract contract VaultBridgeToken is
         // @remind Document.
         if (assets == 0) return nonDepositedAssets;
 
-        // Deposit.
-        uint256 mintedYieldVaultShares = $.yieldVault.deposit(assets, address(this));
+        // @remind Document.
+        try this.performReversibleYieldVaultDeposit(assets) {}
+        catch (bytes memory data) {
+            (bool depositSucceeded, bytes memory depositData, bool solvencyCheckPassed) =
+                abi.decode(data, (bool, bytes, bool));
 
-        // @follow-up Make this check optional such as that if it does not pass, all assets could be reserved instead of reverting (in applicable cases).
-        // Check the output.
-        // This code checks if the minted yield vault shares are worth enough in the underlying token, on average. Allows for 1% slippage.
-        require(
-            $.yieldVault.convertToAssets(mintedYieldVaultShares)
-                >= Math.mulDiv(_assetsAfterTransferFee(assets), 0.99e18, 1e18),
-            InsufficientYieldVaultSharesMinted(assets, mintedYieldVaultShares)
-        );
+            if (!depositSucceeded) {
+                assembly ("memory-safe") {
+                    revert(add(32, depositData), mload(depositData))
+                }
+            }
+
+            if (!solvencyCheckPassed) {
+                if (exact) {
+                    uint256 mintedYieldVaultShares = abi.decode(depositData, (uint256));
+                    revert InsufficientYieldVaultSharesMinted(assets, mintedYieldVaultShares);
+                } else {
+                    return originalAssets;
+                }
+            }
+
+            revert UnknownError(data);
+        }
+    }
+
+    // @todo Document (the entire function).
+    function performReversibleYieldVaultDeposit(uint256 assets) external whenNotPaused onlySelf {
+        VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
+
+        bool depositSucceeded;
+        bytes memory depositData;
+        bool solvencyCheckPassed;
+
+        uint256 oldStakedAssets = stakedAssets();
+
+        (depositSucceeded, depositData) =
+            address($.yieldVault).call(abi.encodeCall(IERC4626.deposit, (assets, address(this))));
+
+        if (depositSucceeded) {
+            // Check the output.
+            // This code checks if the minted yield vault shares are worth enough in the underlying token.
+            solvencyCheckPassed = stakedAssets() - oldStakedAssets
+                >= Math.mulDiv(assets, 1e18 - $.yieldVaultAllowedSlippagePercentage, 1e18);
+        }
+
+        if (!depositSucceeded || !solvencyCheckPassed) {
+            bytes memory data = abi.encode(depositSucceeded, depositData, solvencyCheckPassed);
+            assembly ("memory-safe") {
+                revert(add(32, data), mload(data))
+            }
+        }
     }
 
     // @remind Redocument.
@@ -1286,13 +1330,13 @@ abstract contract VaultBridgeToken is
 
         // @remind Redocument.
         // Check the output.
-        // This code checks if the contract would go insolvent if the amount of the underlying token required to back the portion of the total supply (including the uncollected yield) not backed by the reserved assets were withdrawn at this exchange rate. Allows for 1% slippage.
+        // This code checks if the contract would go insolvent if the amount of the underlying token required to back the portion of the total supply (including the uncollected yield) not backed by the reserved assets were withdrawn at this exchange rate.
         require(
             Math.mulDiv(
                 convertToAssets(originalTotalSupply + originalUncollectedYield) - originalReservedAssets,
                 burnedYieldVaultShares,
                 assets
-            ) <= Math.mulDiv(yieldVaultSharesBalanceBefore, 1.01e18, 1e18),
+            ) <= Math.mulDiv(yieldVaultSharesBalanceBefore, 1e18 + $.yieldVaultAllowedSlippagePercentage, 1e18),
             ExcessiveYieldVaultSharesBurned(burnedYieldVaultShares, assets)
         );
 
@@ -1302,32 +1346,22 @@ abstract contract VaultBridgeToken is
             receiver == address(this) ? ($.underlyingToken.balanceOf(address(this)) - underlyingTokenBalanceBefore) : 0;
     }
 
-    // -----================= ::: UNDERLYING TOKEN ::: =================-----
-
     // @remind Document.
-    function _assetsAfterTransferFee(uint256 assetsBeforeTransferFee) internal view returns (uint256) {
+    function setYieldVaultAllowedSlippagePercentage(uint256 allowedSlippagePercentage)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        nonReentrant
+    {
         VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
 
-        // If the transfer fee calculator is set, there is a transfer fee.
-        if (address($.transferFeeCalculator) != address(0)) {
-            return $.transferFeeCalculator.assetsAfterTransferFee(assetsBeforeTransferFee);
-        }
+        // Check the input.
+        require(allowedSlippagePercentage <= 1e18, InvalidYieldVaultAllowedSlippagePercentage());
 
-        // If the transfer fee calculator is not set, there is no transfer fee.
-        return assetsBeforeTransferFee;
-    }
+        // Set the allowed slippage percentage.
+        $.yieldVaultAllowedSlippagePercentage = allowedSlippagePercentage;
 
-    // @remind Document.
-    function _assetsBeforeTransferFee(uint256 minimumAssetsAfterTransferFee) internal view returns (uint256) {
-        VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
-
-        // If the transfer fee calculator is set, there is a transfer fee.
-        if (address($.transferFeeCalculator) != address(0)) {
-            return $.transferFeeCalculator.assetsBeforeTransferFee(minimumAssetsAfterTransferFee);
-        }
-
-        // If the transfer fee calculator is not set, there is no transfer fee.
-        return minimumAssetsAfterTransferFee;
+        // Emit the event.
+        emit YieldVaultAllowedSlippagePercentageSet(allowedSlippagePercentage);
     }
 
     // -----================= ::: ADMIN ::: =================-----
@@ -1349,8 +1383,7 @@ abstract contract VaultBridgeToken is
     /// @notice Transfers the underlying token from an external account to self.
     /// @dev This function can be overridden to implement custom transfer logic.
     /// @dev @note CAUTION! This function MUST NOT introduce reentrancy/cross-entrancy vulnerabilities.
-    /// @return receivedValue The amount of the underlying token actually received (e.g., after a transfer fee).
-    function _receiveUnderlyingToken(address from, uint256 value) internal virtual returns (uint256 receivedValue) {
+    function _receiveUnderlyingToken(address from, uint256 value) internal virtual {
         VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
 
         // Cache the balance.
@@ -1361,7 +1394,10 @@ abstract contract VaultBridgeToken is
         $.underlyingToken.safeTransferFrom(from, address(this), value);
 
         // Calculate the received amount.
-        receivedValue = $.underlyingToken.balanceOf(address(this)) - balanceBefore;
+        uint256 receivedValue = $.underlyingToken.balanceOf(address(this)) - balanceBefore;
+
+        // Check the output.
+        require(receivedValue == value, InsufficientUnderlyingTokenReceived(receivedValue, value));
     }
 
     /// @notice Transfers the underlying token to an external account.
