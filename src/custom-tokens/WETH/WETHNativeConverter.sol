@@ -135,11 +135,11 @@ contract WETHNativeConverter is NativeConverter {
         WETHNativeConverterStorage storage $ = _getWETHNativeConverterStorage();
         WETH weth = $._weth;
 
-        uint256 migratableBacking_ = migratableBacking();
+        uint256 migratableGasBacking_ = migratableGasBacking();
 
         // Check the input.
         require(amount > 0, InvalidAssets());
-        require(amount <= migratableGasBacking(), AssetsTooLarge(migratableBacking_, amount));
+        require(amount <= migratableGasBacking_, AssetsTooLarge(migratableGasBacking_, amount));
 
         // Precalculate the amount of Custom Token for which backing is being migrated.
         uint256 amountOfCustomToken = _convertToShares(amount);
