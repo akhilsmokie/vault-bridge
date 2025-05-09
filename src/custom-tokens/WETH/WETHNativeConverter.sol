@@ -3,8 +3,7 @@ pragma solidity 0.8.29;
 
 // @todo REVIEW.
 
-// @todo Remove `SafeERC20`, `IERC20`. (Required for the reinitializer).
-import {NativeConverter, Math, SafeERC20, IERC20} from "../../NativeConverter.sol";
+import {NativeConverter, Math} from "../../NativeConverter.sol";
 import {WETH} from "./WETH.sol";
 import {IVersioned} from "../../etc/IVersioned.sol";
 import {MigrationManager} from "../../MigrationManager.sol";
@@ -12,27 +11,20 @@ import {ILxLyBridge} from "../../etc/ILxLyBridge.sol";
 
 /// @title WETH Native Converter
 contract WETHNativeConverter is NativeConverter {
-    // @todo Remove. (Required for the reinitializer).
-    using SafeERC20 for IERC20;
-
     /// @dev Storage of WETHNativeConverter contract.
     /// @dev It's implemented on a custom ERC-7201 namespace to reduce the risk of storage collisions when using with upgradeable contracts.
-    /// @custom:storage-location erc7201:0xpolygon.storage.WETH
+    /// @custom:storage-location erc7201:agglayer.vault-bridge.WETHNativeConverter.storage
     struct WETHNativeConverterStorage {
         WETH _weth;
         bool _gasTokenIsEth;
     }
 
-    // @todo Change the namespace. If upgrading the testnet contracts, add a reinitializer and clean the old slots using assembly.
     /// @dev The storage slot at which WETHNativeConverter storage starts, following the EIP-7201 standard.
-    /// @dev Calculated as `keccak256(abi.encode(uint256(keccak256("0xpolygon.storage.WETHNativeConverter")) - 1)) & ~bytes32(uint256(0xff))`.
+    /// @dev Calculated as `keccak256(abi.encode(uint256(keccak256("agglayer.vault-bridge.WETHNativeConverter.storage")) - 1)) & ~bytes32(uint256(0xff))`.
     bytes32 private constant _WETH_NATIVE_CONVERTER_STORAGE =
-        hex"bf2d0f52fc90c2e373874d27ef2034a489f8af72128c9dcedd13ea84d2ba4700";
+        hex"f9565ea242552c2a1a216404344b0c8f6a3093382a21dd5bd6f5dc2ff1934d00";
 
     error FunctionNotSupportedOnThisNetwork();
-
-    // @todo Remove. If upgrading the testnet contracts, add a reinitializer and clean the slot using assembly.
-    WETH __OUTDATED__weth;
 
     modifier onlyIfGasTokenIsEth() {
         WETHNativeConverterStorage storage $ = _getWETHNativeConverterStorage();
@@ -78,36 +70,6 @@ contract WETHNativeConverter is NativeConverter {
             $.slot := _WETH_NATIVE_CONVERTER_STORAGE
         }
     }
-
-    /*
-    // @todo Remove. (Required for the testnet).
-    function reinitialize(
-        address owner_,
-        uint8 originalUnderlyingTokenDecimals_,
-        address customToken_,
-        address underlyingToken_,
-        address lxlyBridge_,
-        uint32 layerXNetworkId_,
-        uint256 nonMigratableBackingPercentage_,
-        address migrationManager_
-    ) external reinitializer(3) {
-        underlyingToken().forceApprove(address(lxlyBridge()), 0);
-
-        // Reinitialize the base implementation.
-        __NativeConverter_init(
-            owner_,
-            originalUnderlyingTokenDecimals_,
-            customToken_,
-            underlyingToken_,
-            lxlyBridge_,
-            layerXNetworkId_,
-            nonMigratableBackingPercentage_,
-            migrationManager_
-        );
-
-        weth = WETH(payable(customToken_));
-    }
-    */
 
     function migratableGasBacking() public view returns (uint256) {
         uint256 nonMigratableGasBacking =

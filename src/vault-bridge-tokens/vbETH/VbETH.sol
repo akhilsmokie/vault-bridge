@@ -1,10 +1,7 @@
 //
 pragma solidity 0.8.29;
 
-// @todo REVIEW.
-// @follow-up Consider checking whether the network's gas token is ETH, like in WETH and WETHNativeConverter.
-
-import {VaultBridgeToken} from "../../VaultBridgeToken.sol";
+import {VaultBridgeToken, ILxLyBridge} from "../../VaultBridgeToken.sol";
 import {IWETH9} from "../../etc/IWETH9.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {IVersioned} from "../../etc/IVersioned.sol";
@@ -15,6 +12,8 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 contract VbETH is VaultBridgeToken {
     using SafeERC20 for IWETH9;
 
+    error ContractNotSupportedOnThisNetwork();
+
     constructor() {
         _disableInitializers();
     }
@@ -23,6 +22,12 @@ contract VbETH is VaultBridgeToken {
         external
         initializer
     {
+        require(
+            ILxLyBridge(initParams.lxlyBridge).gasTokenAddress() == address(0)
+                && ILxLyBridge(initParams.lxlyBridge).gasTokenNetwork() == 0,
+            ContractNotSupportedOnThisNetwork()
+        );
+
         // Initialize the base implementation.
         __VaultBridgeToken_init(initializer_, initParams);
     }

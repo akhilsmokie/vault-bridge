@@ -49,7 +49,7 @@ abstract contract VaultBridgeToken is
 
     /// @dev Storage of Vault Bridge Token contract.
     /// @dev It's implemented on a custom ERC-7201 namespace to reduce the risk of storage collisions when using with upgradeable contracts.
-    /// @custom:storage-location erc7201:0xpolygon.storage.VaultBridgeToken
+    /// @custom:storage-location erc7201:agglayer.vault-bridge.VaultBridgeToken.storage
     struct VaultBridgeTokenStorage {
         IERC20 underlyingToken;
         uint8 decimals;
@@ -60,12 +60,10 @@ abstract contract VaultBridgeToken is
         uint256 _netCollectedYield;
         uint32 lxlyId;
         ILxLyBridge lxlyBridge;
-        // @follow-up Remove. If upgrading the testnet contracts, add a reinitializer and clean the old slots using assembly.
-        mapping(uint32 layerYLxlyId => address nativeConverter) __OUTDATED__nativeConverters;
         uint256 migrationFeesFund;
         uint256 minimumYieldVaultDeposit;
         address migrationManager;
-        uint256 yieldVaultAllowedSlippagePercentage;
+        uint256 yieldVaultMaximumSlippagePercentage;
     }
 
     /// @remind Document.
@@ -87,7 +85,7 @@ abstract contract VaultBridgeToken is
         address lxlyBridge;
         uint256 minimumYieldVaultDeposit;
         address migrationManager;
-        uint256 yieldVaultAllowedSlippagePercentage;
+        uint256 yieldVaultMaximumSlippagePercentage;
     }
 
     // Basic roles.
@@ -95,11 +93,10 @@ abstract contract VaultBridgeToken is
     bytes32 public constant YIELD_COLLECTOR_ROLE = keccak256("YIELD_COLLECTOR_ROLE");
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
-    // @todo Change the namespace. If upgrading the testnet contracts, add a reinitializer and clean the old slots using assembly.
     /// @dev The storage slot at which Vault Bridge Token storage starts, following the EIP-7201 standard.
-    /// @dev Calculated as `keccak256(abi.encode(uint256(keccak256("0xpolygon.storage.VaultBridgeToken")) - 1)) & ~bytes32(uint256(0xff))`.
+    /// @dev Calculated as `keccak256(abi.encode(uint256(keccak256("agglayer.vault-bridge.VaultBridgeToken.storage")) - 1)) & ~bytes32(uint256(0xff))`.
     bytes32 private constant _VAULT_BRIDGE_TOKEN_STORAGE =
-        hex"0bb25252701cf32638570970f607d30c3e6cb5d951ee6c3cd06f6d3f41890300";
+        hex"f082fbc4cfb4d172ba00d34227e208a31ceb0982bc189440d519185302e44700";
 
     // Errors.
     error Unauthorized();
@@ -113,7 +110,7 @@ abstract contract VaultBridgeToken is
     error InvalidYieldRecipient();
     error InvalidLxLyBridge();
     error InvalidMigrationManager();
-    error InvalidYieldVaultAllowedSlippagePercentage();
+    error InvalidYieldVaultMaximumSlippagePercentage();
     error InitializationFailed();
     error InvalidAssets();
     error InvalidDestinationNetworkId();
@@ -129,6 +126,7 @@ abstract contract VaultBridgeToken is
     error InvalidOriginNetwork();
     error CannotCompleteMigration(uint256 requiredAssets, uint256 receivedAssets, uint256 assetsInMigrationFund);
     error YieldVaultRedemptionFailed(uint256 sharesToRedeem, uint256 redemptionLimit);
+    error MinimumYieldVaultDepositNotMet(uint256 assetsToDeposit, uint256 minimumYieldVaultDeposit);
     error YieldVaultDepositFailed(uint256 assetsToDeposit, uint256 depositLimit);
     error InsufficientYieldVaultSharesMinted(uint256 depositedAssets, uint256 mintedShares);
     error UnknownError(bytes data);
@@ -153,8 +151,7 @@ abstract contract VaultBridgeToken is
     event MinimumReservePercentageSet(uint256 minimumReservePercentage);
     event YieldVaultDrained(uint256 redeemedShares, uint256 receivedAssets);
     event YieldVaultSet(address yieldVault);
-    event YieldVaultSafetyModeSet(bool safetyMode);
-    event YieldVaultAllowedSlippagePercentageSet(uint256 slippagePercentage);
+    event YieldVaultMaximumSlippagePercentageSet(uint256 slippagePercentage);
 
     /// @dev Checks if the sender is the yield recipient.
     modifier onlyYieldRecipient() {
@@ -186,16 +183,16 @@ abstract contract VaultBridgeToken is
 
     // @remind Document.
     /// @param initParams Please refer to `InitializationParameters` for more information.
-    function __VaultBridgeToken_init(address initializer, InitializationParameters calldata initParams)
+    function __VaultBridgeToken_init(address initializer_, InitializationParameters calldata initParams)
         internal
         onlyInitializing
     {
         // Check the input.
-        require(initializer != address(0), InvalidInitializer());
+        require(initializer_ != address(0), InvalidInitializer());
 
         // Initialize the contract using the external initializer.
         (bool ok, bytes memory data) =
-            initializer.delegatecall(abi.encodeCall(IVaultBridgeTokenInitializer.initialize, (initParams)));
+            initializer_.delegatecall(abi.encodeCall(IVaultBridgeTokenInitializer.initialize, (initParams)));
 
         // @remind Document.
         // Confirm that the initialization succeeded.
@@ -284,9 +281,9 @@ abstract contract VaultBridgeToken is
     }
 
     // @remind Document.
-    function yieldVaultAllowedSlippagePercentage() public view returns (uint256) {
+    function yieldVaultMaximumSlippagePercentage() public view returns (uint256) {
         VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
-        return $.yieldVaultAllowedSlippagePercentage;
+        return $.yieldVaultMaximumSlippagePercentage;
     }
 
     /// @dev Returns a pointer to the ERC-7201 storage namespace.
@@ -406,20 +403,14 @@ abstract contract VaultBridgeToken is
         // Calculate the amount to try to deposit into the yield vault.
         uint256 assetsToDeposit = assets - assetsToReserve;
 
-        // Check whether to skip depositing into the yield vault.
-        if (assetsToDeposit >= $.minimumYieldVaultDeposit) {
-            // Try to deposit into the yield vault.
-            if (assetsToDeposit > 0) {
-                // Deposit, and adjust the reserve if necessary.
-                $.reservedAssets += _depositIntoYieldVault(assetsToDeposit, false);
-            }
-
-            // Update the reserve.
-            $.reservedAssets += assetsToReserve;
-        } else {
-            // Update the reserve.
-            $.reservedAssets += assets;
+        // Try to deposit into the yield vault.
+        if (assetsToDeposit > 0) {
+            // Deposit, and adjust the reserve if necessary.
+            $.reservedAssets += _depositIntoYieldVault(assetsToDeposit, false);
         }
+
+        // Update the reserve.
+        $.reservedAssets += assetsToReserve;
 
         // Mint vbToken.
         if (destinationNetworkId != $.lxlyId) {
@@ -549,9 +540,9 @@ abstract contract VaultBridgeToken is
         return convertToShares(_simulateWithdraw(assets, true));
     }
 
-    // @follow-up Add a solvency check, like in `_withdrawFromYieldVault`.
     /// @dev Calculates the amount of the underlying token that could be withdrawn right now.
     /// @dev This function is used for estimation purposes only.
+    /// @dev @note IMPORTANT: `reservedAssets` must be up-to-date before this function can be used.
     /// @param assets The maximum amount of the underlying token to simulate a withdrawal for.
     /// @param force Whether to revert if the all of the `assets` would not be withdrawn.
     function _simulateWithdraw(uint256 assets, bool force) internal view returns (uint256 withdrawnAssets) {
@@ -571,6 +562,17 @@ abstract contract VaultBridgeToken is
         // @note Yield vault usage.
         uint256 maxWithdraw_ = $.yieldVault.maxWithdraw(address(this));
         maxWithdraw_ = remainingAssets > maxWithdraw_ ? maxWithdraw_ : remainingAssets;
+        uint256 burnedYieldVaultShares = $.yieldVault.previewWithdraw(maxWithdraw_);
+
+        // @remind Document.
+        require(
+            Math.mulDiv(
+                convertToAssets(totalSupply() + yield()) - reservedAssets(), burnedYieldVaultShares, maxWithdraw_
+            ) <= Math.mulDiv($.yieldVault.balanceOf(address(this)), 1e18 + $.yieldVaultMaximumSlippagePercentage, 1e18),
+            ExcessiveYieldVaultSharesBurned(burnedYieldVaultShares, maxWithdraw_)
+        );
+
+        // @remind Document.
         if (remainingAssets == maxWithdraw_) return assets;
         remainingAssets -= maxWithdraw_;
 
@@ -620,21 +622,8 @@ abstract contract VaultBridgeToken is
 
         // Withdraw the underlying token from the reserve.
         if (amountToWithdraw > 0) {
-            // Burn vbToken.
-            _burn(owner, convertToShares(amountToWithdraw));
-
             // Update the reserve.
             $.reservedAssets -= amountToWithdraw;
-
-            // Withdraw to the receiver.
-            _sendUnderlyingToken(receiver, amountToWithdraw);
-
-            // Check if the amount in the reserve was sufficient.
-            if (amountToWithdraw == remainingAssets) {
-                // Emit the ERC-4626 event and return.
-                emit IERC4626.Withdraw(msg.sender, receiver, owner, assets, shares);
-                return shares;
-            }
 
             // Update the remaining assets.
             remainingAssets -= amountToWithdraw;
@@ -644,27 +633,39 @@ abstract contract VaultBridgeToken is
         // @note Yield vault usage.
         uint256 maxWithdraw_ = $.yieldVault.maxWithdraw(address(this));
 
+        uint256 receivedAssets;
+
         // Withdraw the underlying token from the yield vault.
         if (maxWithdraw_ >= remainingAssets) {
-            // Burn vbToken.
-            _burn(owner, convertToShares(remainingAssets));
-
-            // Withdraw to the receiver.
-            _withdrawFromYieldVault(
-                remainingAssets, true, receiver, originalTotalSupply, originalUncollectedYield, originalReservedAssets
+            // Withdraw to this contract.
+            (, receivedAssets) = _withdrawFromYieldVault(
+                remainingAssets,
+                true,
+                address(this),
+                originalTotalSupply,
+                originalUncollectedYield,
+                originalReservedAssets
             );
-
-            // Emit the ERC-4626 event.
-            emit IERC4626.Withdraw(msg.sender, receiver, owner, assets, shares);
-
-            // Return the amount of vbToken burned.
-            return shares;
         } else {
             // Update the remaining assets.
             remainingAssets -= maxWithdraw_;
 
             // Revert because all of the `assets` could not be withdrawn.
             revert AssetsTooLarge(assets - remainingAssets, assets);
+        }
+
+        // Burn vbToken.
+        _burn(owner, shares);
+
+        // Send the underlying token to the receiver.
+        _sendUnderlyingToken(receiver, amountToWithdraw + receivedAssets);
+
+        // Emit the ERC-4626 event.
+        emit IERC4626.Withdraw(msg.sender, receiver, owner, assets, shares);
+
+        // @remind Document.
+        if (reservePercentage() == 0 && $.minimumReservePercentage >= 0.1e18) {
+            _rebalanceReserve(false, false);
         }
     }
 
@@ -1021,20 +1022,14 @@ abstract contract VaultBridgeToken is
         // Calculate the amount to try to deposit into the yield vault.
         uint256 assetsToDeposit = assets - assetsToReserve;
 
-        // Check whether to skip depositing into the yield vault.
-        if (assetsToDeposit >= $.minimumYieldVaultDeposit) {
-            // Try to deposit into the yield vault.
-            if (assetsToDeposit > 0) {
-                // Deposit, and adjust the reserve if necessary.
-                $.reservedAssets += _depositIntoYieldVault(assetsToDeposit, false);
-            }
-
-            // Update the reserve.
-            $.reservedAssets += assetsToReserve;
-        } else {
-            // Update the reserve.
-            $.reservedAssets += assets;
+        // Try to deposit into the yield vault.
+        if (assetsToDeposit > 0) {
+            // Deposit, and adjust the reserve if necessary.
+            $.reservedAssets += _depositIntoYieldVault(assetsToDeposit, false);
         }
+
+        // Update the reserve.
+        $.reservedAssets += assetsToReserve;
 
         // Mint vbToken to self and bridge it to address zero on the origin network.
         // The vbToken will not be claimable on the origin network, but provides liquidity when bridging from Layer Ys to Layer X and increments the pessimistic proof.
@@ -1150,7 +1145,7 @@ abstract contract VaultBridgeToken is
             Math.mulDiv(originalYieldVaultSharesBalance, receivedAssets, shares)
                 >= Math.mulDiv(
                     convertToAssets(originalTotalSupply) - originalReservedAssets,
-                    1e18 - $.yieldVaultAllowedSlippagePercentage,
+                    1e18 - $.yieldVaultMaximumSlippagePercentage,
                     1e18
                 ),
             ExcessiveYieldVaultSharesBurned(shares, receivedAssets)
@@ -1165,7 +1160,7 @@ abstract contract VaultBridgeToken is
     function setYieldVault(address yieldVault_) external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant {
         VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
 
-        // @todo non zero, revoke approval for the old vault.
+        // @todo require non zero, revoke approval for the old vault, approve the new vault.
 
         $.yieldVault = IERC4626(yieldVault_);
 
@@ -1211,6 +1206,12 @@ abstract contract VaultBridgeToken is
     /// @return nonDepositedAssets The amount of the underlying token that could not be deposited into the yield vault. The value will be zero if `exact` is set to `true`.
     function _depositIntoYieldVault(uint256 assets, bool exact) internal returns (uint256 nonDepositedAssets) {
         VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
+
+        // Check whether to skip depositing into the yield vault.
+        if (assets < $.minimumYieldVaultDeposit) {
+            if (exact) revert MinimumYieldVaultDepositNotMet(assets, $.minimumYieldVaultDeposit);
+            return assets;
+        }
 
         // @remind Document.
         uint256 originalAssets = assets;
@@ -1273,7 +1274,7 @@ abstract contract VaultBridgeToken is
             // Check the output.
             // This code checks if the minted yield vault shares are worth enough in the underlying token.
             solvencyCheckPassed = stakedAssets() - oldStakedAssets
-                >= Math.mulDiv(assets, 1e18 - $.yieldVaultAllowedSlippagePercentage, 1e18);
+                >= Math.mulDiv(assets, 1e18 - $.yieldVaultMaximumSlippagePercentage, 1e18);
         }
 
         if (!depositSucceeded || !solvencyCheckPassed) {
@@ -1336,7 +1337,7 @@ abstract contract VaultBridgeToken is
                 convertToAssets(originalTotalSupply + originalUncollectedYield) - originalReservedAssets,
                 burnedYieldVaultShares,
                 assets
-            ) <= Math.mulDiv(yieldVaultSharesBalanceBefore, 1e18 + $.yieldVaultAllowedSlippagePercentage, 1e18),
+            ) <= Math.mulDiv(yieldVaultSharesBalanceBefore, 1e18 + $.yieldVaultMaximumSlippagePercentage, 1e18),
             ExcessiveYieldVaultSharesBurned(burnedYieldVaultShares, assets)
         );
 
@@ -1347,7 +1348,7 @@ abstract contract VaultBridgeToken is
     }
 
     // @remind Document.
-    function setYieldVaultAllowedSlippagePercentage(uint256 allowedSlippagePercentage)
+    function setYieldVaultMaximumSlippagePercentage(uint256 maximumSlippagePercentage)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
         nonReentrant
@@ -1355,13 +1356,13 @@ abstract contract VaultBridgeToken is
         VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
 
         // Check the input.
-        require(allowedSlippagePercentage <= 1e18, InvalidYieldVaultAllowedSlippagePercentage());
+        require(maximumSlippagePercentage <= 1e18, InvalidYieldVaultMaximumSlippagePercentage());
 
         // Set the allowed slippage percentage.
-        $.yieldVaultAllowedSlippagePercentage = allowedSlippagePercentage;
+        $.yieldVaultMaximumSlippagePercentage = maximumSlippagePercentage;
 
         // Emit the event.
-        emit YieldVaultAllowedSlippagePercentageSet(allowedSlippagePercentage);
+        emit YieldVaultMaximumSlippagePercentageSet(maximumSlippagePercentage);
     }
 
     // -----================= ::: ADMIN ::: =================-----

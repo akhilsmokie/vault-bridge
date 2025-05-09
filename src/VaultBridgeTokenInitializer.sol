@@ -40,6 +40,7 @@ contract VaultBridgeTokenInitializer is IVaultBridgeTokenInitializer, VaultBridg
         external
         override
         onlyDelegateCall
+        onlyInitializing
         nonReentrant
         returns (bool success)
     {
@@ -55,7 +56,7 @@ contract VaultBridgeTokenInitializer is IVaultBridgeTokenInitializer, VaultBridg
         require(initParams.yieldRecipient != address(0), InvalidYieldRecipient());
         require(initParams.lxlyBridge != address(0), InvalidLxLyBridge());
         require(initParams.migrationManager != address(0), InvalidMigrationManager());
-        require(initParams.yieldVaultAllowedSlippagePercentage <= 1e18, InvalidYieldVaultAllowedSlippagePercentage());
+        require(initParams.yieldVaultMaximumSlippagePercentage <= 1e18, InvalidYieldVaultMaximumSlippagePercentage());
 
         // Initialize the inherited contracts.
         __ERC20_init(initParams.name, initParams.symbol);
