@@ -1248,8 +1248,12 @@ abstract contract VaultBridgeToken is
                 abi.decode(data, (bool, bytes, bool));
 
             if (!depositSucceeded) {
-                assembly ("memory-safe") {
-                    revert(add(32, depositData), mload(depositData))
+                if (exact) {
+                    assembly ("memory-safe") {
+                        revert(add(32, depositData), mload(depositData))
+                    }
+                } else {
+                    return originalAssets;
                 }
             }
 
