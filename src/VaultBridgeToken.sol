@@ -13,7 +13,8 @@ import {IVaultBridgeTokenInitializer} from "./etc/IVaultBridgeTokenInitializer.s
 import {Initializable} from "@openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 import {AccessControlUpgradeable} from "@openzeppelin-contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {PausableUpgradeable} from "@openzeppelin-contracts-upgradeable/utils/PausableUpgradeable.sol";
-import {ReentrancyGuardUpgradeable} from "@openzeppelin-contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import {ReentrancyGuardTransientUpgradeable} from
+    "@openzeppelin-contracts-upgradeable/utils/ReentrancyGuardTransientUpgradeable.sol";
 import {ERC20PermitUser} from "./etc/ERC20PermitUser.sol";
 import {IVersioned} from "./etc/IVersioned.sol";
 
@@ -38,7 +39,7 @@ abstract contract VaultBridgeToken is
     Initializable,
     AccessControlUpgradeable,
     PausableUpgradeable,
-    ReentrancyGuardUpgradeable,
+    ReentrancyGuardTransientUpgradeable,
     IERC4626,
     ERC20PermitUpgradeable,
     ERC20PermitUser,
@@ -121,7 +122,7 @@ abstract contract VaultBridgeToken is
     error AssetsTooLarge(uint256 availableAssets, uint256 requestedAssets);
     error IncorrectAmountOfSharesRedeemed(uint256 redeemedShares, uint256 requiredShares);
     error CannotRebalanceReserve();
-    error NoNeedToReplenishReserve();
+    error NoNeedToRebalanceReserve();
     error NoYield();
     error InvalidOriginNetwork();
     error CannotCompleteMigration(uint256 requiredAssets, uint256 receivedAssets, uint256 assetsInMigrationFund);
@@ -141,7 +142,7 @@ abstract contract VaultBridgeToken is
     event DonatedAsYield(address indexed who, uint256 assets);
     event DonatedForCompletingMigration(address indexed who, uint256 assets);
     event MigrationCompleted(
-        uint32 indexed destinationNetworkId,
+        uint32 indexed originNetwork,
         uint256 indexed shares,
         uint256 indexed assets,
         uint256 migrationFeesFundUtilization
@@ -176,7 +177,6 @@ abstract contract VaultBridgeToken is
 
     /// @dev Checks if the sender is the vbToken itself.
     modifier onlySelf() {
-        VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
         require(msg.sender == address(this), Unauthorized());
         _;
     }
@@ -405,8 +405,8 @@ abstract contract VaultBridgeToken is
 
         // Try to deposit into the yield vault.
         if (assetsToDeposit > 0) {
-            // Deposit, and adjust the reserve if necessary.
-            $.reservedAssets += _depositIntoYieldVault(assetsToDeposit, false);
+            // Deposit, and update the amount to reserve if necessary.
+            assetsToReserve += _depositIntoYieldVault(assetsToDeposit, false);
         }
 
         // Update the reserve.
@@ -562,15 +562,29 @@ abstract contract VaultBridgeToken is
         // @note Yield vault usage.
         uint256 maxWithdraw_ = $.yieldVault.maxWithdraw(address(this));
         maxWithdraw_ = remainingAssets > maxWithdraw_ ? maxWithdraw_ : remainingAssets;
-        uint256 burnedYieldVaultShares = $.yieldVault.previewWithdraw(maxWithdraw_);
+        uint256 burnedYieldVaultShares;
+        try $.yieldVault.previewWithdraw(maxWithdraw_) returns (uint256 shares) {
+            burnedYieldVaultShares = shares;
+        } catch (bytes memory data) {
+            if (force) {
+                assembly ("memory-safe") {
+                    revert(add(32, data), mload(data))
+                }
+            } else {
+                return $.reservedAssets;
+            }
+        }
 
         // @remind Document.
-        require(
-            Math.mulDiv(
-                convertToAssets(totalSupply() + yield()) - reservedAssets(), burnedYieldVaultShares, maxWithdraw_
-            ) <= Math.mulDiv($.yieldVault.balanceOf(address(this)), 1e18 + $.yieldVaultMaximumSlippagePercentage, 1e18),
-            ExcessiveYieldVaultSharesBurned(burnedYieldVaultShares, maxWithdraw_)
-        );
+        bool solvencyCheckPassed = Math.mulDiv(
+            convertToAssets(totalSupply() + yield()) - reservedAssets(), burnedYieldVaultShares, maxWithdraw_
+        ) <= Math.mulDiv($.yieldVault.balanceOf(address(this)), 1e18 + $.yieldVaultMaximumSlippagePercentage, 1e18);
+
+        // @remind Document.
+        if (!solvencyCheckPassed) {
+            if (force) revert ExcessiveYieldVaultSharesBurned(burnedYieldVaultShares, maxWithdraw_);
+            return $.reservedAssets;
+        }
 
         // @remind Document.
         if (remainingAssets == maxWithdraw_) return assets;
@@ -584,7 +598,6 @@ abstract contract VaultBridgeToken is
     }
 
     /// @notice Withdraw a specific amount of the underlying token by burning the required amount of vbToken.
-    /// @notice Transfer fees of the underlying token may apply.
     function withdraw(uint256 assets, address receiver, address owner)
         external
         whenNotPaused
@@ -618,7 +631,7 @@ abstract contract VaultBridgeToken is
         uint256 remainingAssets = assets;
 
         // Calculate the amount to withdraw from the reserve.
-        uint256 amountToWithdraw = $.reservedAssets > remainingAssets ? remainingAssets : $.reservedAssets;
+        uint256 amountToWithdraw = originalReservedAssets > remainingAssets ? remainingAssets : originalReservedAssets;
 
         // Withdraw the underlying token from the reserve.
         if (amountToWithdraw > 0) {
@@ -691,7 +704,6 @@ abstract contract VaultBridgeToken is
     }
 
     /// @notice Burn a specific amount of vbToken and unlock the respective amount of the underlying token.
-    /// @notice Transfer fees of the underlying token may apply.
     function redeem(uint256 shares, address receiver, address owner)
         external
         whenNotPaused
@@ -712,7 +724,6 @@ abstract contract VaultBridgeToken is
     }
 
     /// @notice Claim vbToken from LxLy Bridge and redeem it.
-    /// @notice Transfer fees of the underlying token may apply.
     function claimAndRedeem(
         bytes32[32] calldata smtProofLocalExitRoot,
         bytes32[32] calldata smtProofRollupExitRoot,
@@ -727,7 +738,6 @@ abstract contract VaultBridgeToken is
         VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
 
         // Claim vbToken from LxLy Bridge.
-        // @todo Review the hardcoded values. (This may change after the upgradeable tokens LxLy upgrade).
         $.lxlyBridge.claimAsset(
             smtProofLocalExitRoot,
             smtProofRollupExitRoot,
@@ -856,7 +866,7 @@ abstract contract VaultBridgeToken is
         uint256 originalUncollectedYield = yield();
 
         // Calculate the minimum reserve amount.
-        uint256 minimumReserve = convertToAssets(Math.mulDiv(totalSupply(), $.minimumReservePercentage, 1e18));
+        uint256 minimumReserve = convertToAssets(Math.mulDiv(originalTotalSupply, $.minimumReservePercentage, 1e18));
 
         // Check if the reserve is below, above, or at the minimum threshold.
         /* Below. */
@@ -897,7 +907,7 @@ abstract contract VaultBridgeToken is
         }
         /* At. */
         else if (force) {
-            revert NoNeedToReplenishReserve();
+            revert NoNeedToRebalanceReserve();
         }
     }
 
@@ -1024,8 +1034,8 @@ abstract contract VaultBridgeToken is
 
         // Try to deposit into the yield vault.
         if (assetsToDeposit > 0) {
-            // Deposit, and adjust the reserve if necessary.
-            $.reservedAssets += _depositIntoYieldVault(assetsToDeposit, false);
+            // Deposit, and update the amount to reserve if necessary.
+            assetsToReserve += _depositIntoYieldVault(assetsToDeposit, false);
         }
 
         // Update the reserve.
@@ -1085,11 +1095,9 @@ abstract contract VaultBridgeToken is
     }
 
     /// @notice Sets the minimum reserve percentage.
-    /// @notice The reserve will be rebalanced after changing the minimum reserve percentage.
     /// @notice This function can be called by the owner only.
     function setMinimumReservePercentage(uint256 minimumReservePercentage_)
         external
-        whenNotPaused
         onlyRole(DEFAULT_ADMIN_ROLE)
         nonReentrant
     {
@@ -1100,9 +1108,6 @@ abstract contract VaultBridgeToken is
 
         // Set the minimum reserve percentage.
         $.minimumReservePercentage = minimumReservePercentage_;
-
-        // Try to rebalance the reserve.
-        _rebalanceReserve(false, true);
 
         // Emit the event.
         emit MinimumReservePercentageSet(minimumReservePercentage_);
@@ -1160,18 +1165,22 @@ abstract contract VaultBridgeToken is
     function setYieldVault(address yieldVault_) external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant {
         VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
 
-        // @todo require non zero, revoke approval for the old vault, approve the new vault.
+        require(yieldVault_ != address(0), InvalidYieldVault());
+
+        $.underlyingToken.forceApprove(address($.yieldVault), 0);
 
         $.yieldVault = IERC4626(yieldVault_);
 
+        $.underlyingToken.forceApprove(yieldVault_, type(uint256).max);
+
+        // Emit the event.
         emit YieldVaultSet(yieldVault_);
     }
 
     /// @notice Sets the minimum deposit amount that triggers a yield vault deposit.
     /// @notice This function can be called by the owner only.
-    function setMinimumDepositAmount(uint256 minimumYieldVaultDeposit_)
+    function setMinimumYieldVaultDeposit(uint256 minimumYieldVaultDeposit_)
         external
-        whenNotPaused
         onlyRole(DEFAULT_ADMIN_ROLE)
         nonReentrant
     {
@@ -1257,7 +1266,7 @@ abstract contract VaultBridgeToken is
         }
     }
 
-    // @todo Document (the entire function).
+    // @remind Document (the entire function).
     function performReversibleYieldVaultDeposit(uint256 assets) external whenNotPaused onlySelf {
         VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
 
@@ -1358,7 +1367,7 @@ abstract contract VaultBridgeToken is
         // Check the input.
         require(maximumSlippagePercentage <= 1e18, InvalidYieldVaultMaximumSlippagePercentage());
 
-        // Set the allowed slippage percentage.
+        // Set the maximum slippage percentage.
         $.yieldVaultMaximumSlippagePercentage = maximumSlippagePercentage;
 
         // Emit the event.

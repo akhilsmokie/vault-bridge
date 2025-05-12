@@ -78,7 +78,7 @@ abstract contract NativeConverter is
     error OnlyMigrator();
 
     // Events.
-    event MigrationStarted(address indexed initiator, uint256 indexed mintedCustomToken, uint256 migratedBacking);
+    event MigrationStarted(uint256 indexed mintedCustomToken, uint256 indexed migratedBacking);
     event NonMigratableBackingPercentageSet(uint256 nonMigratableBackingPercentage);
 
     /// @param originalUnderlyingTokenDecimals_ The number of decimals of the original underlying token on Layer X. The `customToken` and `underlyingToken` MUST have the same number of decimals as the original underlying token. @note (ATTENTION) The decimals of the `customToken` and `underlyingToken` will default to 18 if they revert.
@@ -136,6 +136,8 @@ abstract contract NativeConverter is
         __AccessControl_init();
         __Pausable_init();
         __ReentrancyGuard_init();
+        __Context_init();
+        __ERC165_init();
 
         // Grant the basic roles.
         _grantRole(DEFAULT_ADMIN_ROLE, owner_);
@@ -444,7 +446,7 @@ abstract contract NativeConverter is
         );
 
         // Emit the event.
-        emit MigrationStarted(msg.sender, shares, assets);
+        emit MigrationStarted(shares, assets);
     }
 
     /// @notice Sets the percentage of backing that should remain in Native Converter after a migration, based on the total supply of Custom Token.
@@ -453,7 +455,6 @@ abstract contract NativeConverter is
     /// @param nonMigratableBackingPercentage_ 1e18 is 100%.
     function setNonMigratableBackingPercentage(uint256 nonMigratableBackingPercentage_)
         external
-        whenNotPaused
         onlyRole(DEFAULT_ADMIN_ROLE)
         nonReentrant
     {

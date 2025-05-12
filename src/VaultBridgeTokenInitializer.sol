@@ -61,10 +61,11 @@ contract VaultBridgeTokenInitializer is IVaultBridgeTokenInitializer, VaultBridg
         // Initialize the inherited contracts.
         __ERC20_init(initParams.name, initParams.symbol);
         __ERC20Permit_init(initParams.name);
-        __Nonces_init();
         __AccessControl_init();
         __Pausable_init();
-        __ReentrancyGuard_init();
+        __ReentrancyGuardTransient_init();
+        __Nonces_init();
+        __ERC165_init();
 
         // Grant the basic roles.
         _grantRole(DEFAULT_ADMIN_ROLE, initParams.owner);
@@ -87,6 +88,7 @@ contract VaultBridgeTokenInitializer is IVaultBridgeTokenInitializer, VaultBridg
         $.lxlyBridge = ILxLyBridge(initParams.lxlyBridge);
         $.minimumYieldVaultDeposit = initParams.minimumYieldVaultDeposit;
         $.migrationManager = initParams.migrationManager;
+        $.yieldVaultMaximumSlippagePercentage = initParams.yieldVaultMaximumSlippagePercentage;
 
         // Approve the yield vault and LxLy Bridge.
         IERC20(initParams.underlyingToken).forceApprove(initParams.yieldVault, type(uint256).max);

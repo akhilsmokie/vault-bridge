@@ -15,7 +15,7 @@ import {IVersioned} from "./etc/IVersioned.sol";
 /// @title Custom Token
 /// @notice A Custom Token is an ERC-20 token deployed on Layer Ys to represent the native version of the original underlying token from Layer X on Layer Y.
 /// @dev A base contract used to create Custom Tokens.
-/// @dev @note IMPROTANT: Custom Token MUST be custom mapped to the corresponding vbToken on LxLy Bridge on Layer Y and MUST give the minting and burning permission to LxLy Bridge and Native Converter. It MAY have a transfer fee.
+/// @dev @note IMPORTANT: Custom Token MUST be custom mapped to the corresponding vbToken on LxLy Bridge on Layer Y and MUST give the minting and burning permission to LxLy Bridge and Native Converter. It MAY have a transfer fee.
 abstract contract CustomToken is
     Initializable,
     AccessControlUpgradeable,
@@ -83,10 +83,12 @@ abstract contract CustomToken is
         // Initialize the inherited contracts.
         __ERC20_init(name_, symbol_);
         __ERC20Permit_init(name_);
-        __Nonces_init();
         __AccessControl_init();
         __Pausable_init();
         __ReentrancyGuard_init();
+        __Context_init();
+        __ERC165_init();
+        __Nonces_init();
 
         // Grant the basic roles.
         _grantRole(DEFAULT_ADMIN_ROLE, owner_);

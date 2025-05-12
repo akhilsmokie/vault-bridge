@@ -1,8 +1,6 @@
 //
 pragma solidity 0.8.29;
 
-// @todo REVIEW.
-
 /// @dev Main functionality.
 import {IBridgeMessageReceiver} from "./etc/IBridgeMessageReceiver.sol";
 
@@ -10,7 +8,8 @@ import {IBridgeMessageReceiver} from "./etc/IBridgeMessageReceiver.sol";
 import {Initializable} from "@openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 import {AccessControlUpgradeable} from "@openzeppelin-contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {PausableUpgradeable} from "@openzeppelin-contracts-upgradeable/utils/PausableUpgradeable.sol";
-import {ReentrancyGuardUpgradeable} from "@openzeppelin-contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import {ReentrancyGuardTransientUpgradeable} from
+    "@openzeppelin-contracts-upgradeable/utils/ReentrancyGuardTransientUpgradeable.sol";
 import {IVersioned} from "./etc/IVersioned.sol";
 
 /// @dev Libraries.
@@ -30,7 +29,7 @@ contract MigrationManager is
     Initializable,
     AccessControlUpgradeable,
     PausableUpgradeable,
-    ReentrancyGuardUpgradeable,
+    ReentrancyGuardTransientUpgradeable,
     IVersioned
 {
     // Libraries.
@@ -53,6 +52,7 @@ contract MigrationManager is
     /// @custom:storage-location erc7201:agglayer.vault-bridge.MigrationManager.storage
     struct MigrationManagerStorage {
         ILxLyBridge lxlyBridge;
+        uint32 _lxlyId;
         mapping(uint32 layerYLxLyId => mapping(address nativeConverter => TokenPair tokenPair))
             nativeConvertersConfiguration;
     }
@@ -111,7 +111,9 @@ contract MigrationManager is
         // Initialize the inherited contracts.
         __AccessControl_init();
         __Pausable_init();
-        __ReentrancyGuard_init();
+        __ReentrancyGuardTransient_init();
+        __Context_init();
+        __ERC165_init();
 
         // Grant the basic roles.
         _grantRole(DEFAULT_ADMIN_ROLE, owner_);
@@ -119,6 +121,7 @@ contract MigrationManager is
 
         // Initialize the storage.
         $.lxlyBridge = ILxLyBridge(lxlyBridge_);
+        $._lxlyId = $.lxlyBridge.networkID();
     }
 
     // -----================= ::: STORAGE ::: =================-----
@@ -160,11 +163,14 @@ contract MigrationManager is
         uint32[] calldata layerYLxlyIds,
         address[] calldata nativeConverters,
         address vbToken
-    ) external whenNotPaused onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant {
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant {
         MigrationManagerStorage storage $ = _getMigrationManagerStorage();
 
         // Check the inputs.
         require(layerYLxlyIds.length == nativeConverters.length, NonMatchingInputLengths());
+
+        // @remind Document.
+        uint32 lxlyId = $._lxlyId;
 
         for (uint256 i; i < layerYLxlyIds.length; ++i) {
             // Cache the inputs.
@@ -172,7 +178,7 @@ contract MigrationManager is
             address nativeConverter = nativeConverters[i];
 
             // Check the inputs.
-            require(layerYLxlyId != $.lxlyBridge.networkID(), InvalidLayerYLxLyId());
+            require(layerYLxlyId != lxlyId, InvalidLayerYLxLyId());
             require(nativeConverter != address(0), InvalidNativeConverter());
 
             TokenPair memory oldTokens = $.nativeConvertersConfiguration[layerYLxlyId][nativeConverter];
@@ -201,9 +207,7 @@ contract MigrationManager is
             /* Unset tokens. */
             else {
                 // Revoke the approval of vbToken.
-                $.nativeConvertersConfiguration[layerYLxlyId][nativeConverter].underlyingToken.forceApprove(
-                    address(oldTokens.vbToken), 0
-                );
+                oldTokens.underlyingToken.forceApprove(address(oldTokens.vbToken), 0);
 
                 // Unset the tokens.
                 delete $.nativeConvertersConfiguration[layerYLxlyId][nativeConverter];

@@ -13,6 +13,7 @@ contract VbETH is VaultBridgeToken {
     using SafeERC20 for IWETH9;
 
     error ContractNotSupportedOnThisNetwork();
+    error InsufficientMessageValue(uint256 messageValue, uint256 requiredValue);
 
     constructor() {
         _disableInitializers();
@@ -70,6 +71,7 @@ contract VbETH is VaultBridgeToken {
         IWETH9 weth = IWETH9(address(underlyingToken()));
 
         if (msg.value > 0) {
+            require(msg.value >= assets, InsufficientMessageValue(msg.value, assets));
             // deposit everything, excess funds will be refunded in WETH
             weth.deposit{value: msg.value}();
         } else {

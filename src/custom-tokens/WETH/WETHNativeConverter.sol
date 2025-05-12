@@ -1,8 +1,6 @@
 //
 pragma solidity 0.8.29;
 
-// @todo REVIEW.
-
 import {NativeConverter, Math} from "../../NativeConverter.sol";
 import {WETH} from "./WETH.sol";
 import {IVersioned} from "../../etc/IVersioned.sol";
@@ -124,7 +122,7 @@ contract WETHNativeConverter is NativeConverter {
         );
 
         // Emit the event.
-        emit MigrationStarted(msg.sender, amountOfCustomToken, amount);
+        emit MigrationStarted(amountOfCustomToken, amount);
     }
 
     receive() external payable whenNotPaused onlyIfGasTokenIsEth {}

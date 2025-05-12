@@ -1,8 +1,6 @@
 //
 pragma solidity 0.8.29;
 
-// @todo REVIEW.
-
 import {CustomToken} from "../../CustomToken.sol";
 import {IWETH9} from "../../etc/IWETH9.sol";
 import {IVersioned} from "../../etc/IVersioned.sol";
