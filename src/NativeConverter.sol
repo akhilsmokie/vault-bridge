@@ -152,9 +152,6 @@ abstract contract NativeConverter is
         $.layerXLxlyId = layerXLxlyId_;
         $.migrationManager = migrationManager_;
         $.nonMigratableBackingPercentage = nonMigratableBackingPercentage_;
-
-        // Approve LxLy Bridge.
-        $.underlyingToken.forceApprove(address($.lxlyBridge), type(uint256).max);
     }
 
     // -----================= ::: STORAGE ::: =================-----

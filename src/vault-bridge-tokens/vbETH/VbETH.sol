@@ -12,8 +12,11 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 contract VbETH is VaultBridgeToken {
     using SafeERC20 for IWETH9;
 
+    bool private transient _receiveViaMsgValue;
+    uint256 private transient _designatedMsgValue;
+
     error ContractNotSupportedOnThisNetwork();
-    error InsufficientMessageValue(uint256 messageValue, uint256 requiredValue);
+    error InsufficientDesignatedMsgValue (uint256 designatedMsgValue, uint256 msgValue, uint256 requiredAssets);
 
     constructor() {
         _disableInitializers();
@@ -35,7 +38,7 @@ contract VbETH is VaultBridgeToken {
 
     /// @dev deposit ETH to get vbETH
     function depositGasToken(address receiver) external payable whenNotPaused nonReentrant returns (uint256 shares) {
-        (shares,) = _deposit(msg.value, lxlyId(), receiver, false, 0);
+        (shares,) = _depositViaMsgValue(msg.value, msg.value, lxlyId(), receiver, false, 0);
     }
 
     /// @dev deposit ETH to get vbETH and bridge to an L2
@@ -44,7 +47,26 @@ contract VbETH is VaultBridgeToken {
         uint32 destinationNetworkId,
         bool forceUpdateGlobalExitRoot
     ) external payable whenNotPaused nonReentrant returns (uint256 shares) {
-        (shares,) = _deposit(msg.value, destinationNetworkId, destinationAddress, forceUpdateGlobalExitRoot, 0);
+        (shares,) = _depositViaMsgValue(
+            msg.value, msg.value, destinationNetworkId, destinationAddress, forceUpdateGlobalExitRoot, 0
+        );
+    }
+
+    function _depositViaMsgValue(
+        uint256 designatedMsgValue,
+        uint256 assets,
+        uint32 destinationNetworkId,
+        address receiver,
+        bool forceUpdateGlobalExitRoot,
+        uint256 maxShares
+    ) internal returns (uint256 shares, uint256 spentAssets) {
+        _receiveViaMsgValue = true;
+        _designatedMsgValue = designatedMsgValue;
+
+        (shares, spentAssets) = _deposit(assets, destinationNetworkId, receiver, forceUpdateGlobalExitRoot, maxShares);
+
+        _receiveViaMsgValue = false;
+        _designatedMsgValue = 0;
     }
 
     function mintWithGasToken(uint256 shares, address receiver)
@@ -61,22 +83,39 @@ contract VbETH is VaultBridgeToken {
         uint256 mintedShares;
         (mintedShares, assets) =
         // msg.value is used as assets value, if it exceeds shares value, WETH will be refunded
-         _deposit(msg.value, lxlyId(), receiver, false, shares);
+         _depositViaMsgValue(msg.value, msg.value, lxlyId(), receiver, false, shares);
 
         // Check the output.
         require(mintedShares == shares, IncorrectAmountOfSharesMinted(mintedShares, shares));
     }
 
-    function _receiveUnderlyingToken(address, uint256 assets) internal override {
+    function _receiveUnderlyingToken(address from, uint256 assets) internal override {
         IWETH9 weth = IWETH9(address(underlyingToken()));
 
-        if (msg.value > 0) {
-            require(msg.value >= assets, InsufficientMessageValue(msg.value, assets));
+        uint256 balanceBefore = weth.balanceOf(address(this));
+
+        if (_receiveViaMsgValue) {
+            assert(from == msg.sender);
+            assert(_designatedMsgValue != 0);
+
+            require(_designatedMsgValue == assets, InsufficientDesignatedMsgValue(_designatedMsgValue, msg.value, assets));
+
+            assets = _designatedMsgValue;
+
             // deposit everything, excess funds will be refunded in WETH
-            weth.deposit{value: msg.value}();
+            weth.deposit{value: assets}();
+
+            _receiveViaMsgValue = false;
+            _designatedMsgValue = 0;
         } else {
-            weth.safeTransferFrom(msg.sender, address(this), assets);
+            weth.safeTransferFrom(from, address(this), assets);
         }
+
+        uint256 balanceAfter = weth.balanceOf(address(this));
+
+        uint256 receivedAssets = balanceAfter - balanceBefore;
+
+        require(receivedAssets == assets, InsufficientUnderlyingTokenReceived(receivedAssets, assets));
     }
 
     /// @inheritdoc IVersioned
