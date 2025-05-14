@@ -943,8 +943,8 @@ abstract contract VaultBridgeToken is
 
     /// @notice Burns a specific amount of vbToken.
     /// @notice This function can be used if the yield recipient has collected an unrealistic (excessive) amount of yield historically.
-    /// @notice The reserve will be rebalanced after burning vbToken.
     /// @notice This function can be called by the yield recipient only.
+    /// @dev Does not rebalance the reserve after burning to allow usage while the contract is paused.
     function burn(uint256 shares) external onlyYieldRecipient nonReentrant {
         VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
 
@@ -956,9 +956,6 @@ abstract contract VaultBridgeToken is
 
         // Burn vbToken.
         _burn(msg.sender, shares);
-
-        // Try to rebalance the reserve.
-        _rebalanceReserve(false, true);
 
         // Emit the event.
         emit Burned(shares);
