@@ -102,11 +102,11 @@ contract VbETH is VaultBridgeToken {
 
             assets = _designatedMsgValue;
 
-            // deposit everything, excess funds will be refunded in WETH
-            weth.deposit{value: assets}();
-
             _receiveViaMsgValue = false;
             _designatedMsgValue = 0;
+
+            // deposit everything, excess funds will be refunded in WETH
+            weth.deposit{value: assets}();
         } else {
             weth.safeTransferFrom(from, address(this), assets);
         }
