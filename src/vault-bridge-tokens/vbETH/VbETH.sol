@@ -12,11 +12,8 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 contract VbETH is VaultBridgeToken {
     using SafeERC20 for IWETH9;
 
-    bool private transient _receiveViaMsgValue;
-    uint256 private transient _designatedMsgValue;
-
     error ContractNotSupportedOnThisNetwork();
-    error InsufficientDesignatedMsgValue (uint256 designatedMsgValue, uint256 msgValue, uint256 requiredAssets);
+    error IncorrectMsgValue(uint256 msgValue, uint256 requestedAssets);
 
     constructor() {
         _disableInitializers();
@@ -38,7 +35,9 @@ contract VbETH is VaultBridgeToken {
 
     /// @dev deposit ETH to get vbETH
     function depositGasToken(address receiver) external payable whenNotPaused nonReentrant returns (uint256 shares) {
-        (shares,) = _depositViaMsgValue(msg.value, msg.value, lxlyId(), receiver, false, 0);
+        (shares,) = _depositUsingCustomReceivingFunction(
+            _receiveUnderlyingTokenViaMsgValue, msg.value, lxlyId(), receiver, false, 0
+        );
     }
 
     /// @dev deposit ETH to get vbETH and bridge to an L2
@@ -47,26 +46,14 @@ contract VbETH is VaultBridgeToken {
         uint32 destinationNetworkId,
         bool forceUpdateGlobalExitRoot
     ) external payable whenNotPaused nonReentrant returns (uint256 shares) {
-        (shares,) = _depositViaMsgValue(
-            msg.value, msg.value, destinationNetworkId, destinationAddress, forceUpdateGlobalExitRoot, 0
+        (shares,) = _depositUsingCustomReceivingFunction(
+            _receiveUnderlyingTokenViaMsgValue,
+            msg.value,
+            destinationNetworkId,
+            destinationAddress,
+            forceUpdateGlobalExitRoot,
+            0
         );
-    }
-
-    function _depositViaMsgValue(
-        uint256 designatedMsgValue,
-        uint256 assets,
-        uint32 destinationNetworkId,
-        address receiver,
-        bool forceUpdateGlobalExitRoot,
-        uint256 maxShares
-    ) internal returns (uint256 shares, uint256 spentAssets) {
-        _receiveViaMsgValue = true;
-        _designatedMsgValue = designatedMsgValue;
-
-        (shares, spentAssets) = _deposit(assets, destinationNetworkId, receiver, forceUpdateGlobalExitRoot, maxShares);
-
-        _receiveViaMsgValue = false;
-        _designatedMsgValue = 0;
     }
 
     function mintWithGasToken(uint256 shares, address receiver)
@@ -77,39 +64,31 @@ contract VbETH is VaultBridgeToken {
         returns (uint256 assets)
     {
         require(shares > 0, InvalidShares());
-        // The receiver is checked in the `_deposit` function.
+        // The receiver is checked in the `_depositUsingCustomReceivingFunction` function.
 
         // Mint vbToken to the receiver.
         uint256 mintedShares;
         (mintedShares, assets) =
         // msg.value is used as assets value, if it exceeds shares value, WETH will be refunded
-         _depositViaMsgValue(msg.value, msg.value, lxlyId(), receiver, false, shares);
+        _depositUsingCustomReceivingFunction(
+            _receiveUnderlyingTokenViaMsgValue, msg.value, lxlyId(), receiver, false, shares
+        );
 
         // Check the output.
         require(mintedShares == shares, IncorrectAmountOfSharesMinted(mintedShares, shares));
     }
 
-    function _receiveUnderlyingToken(address from, uint256 assets) internal override {
+    function _receiveUnderlyingTokenViaMsgValue(address from, uint256 assets) internal {
+        assert(from == msg.sender);
+
+        require(msg.value == assets, IncorrectMsgValue(msg.value, assets));
+
         IWETH9 weth = IWETH9(address(underlyingToken()));
 
         uint256 balanceBefore = weth.balanceOf(address(this));
 
-        if (_receiveViaMsgValue) {
-            assert(from == msg.sender);
-            assert(_designatedMsgValue != 0);
-
-            require(_designatedMsgValue == assets, InsufficientDesignatedMsgValue(_designatedMsgValue, msg.value, assets));
-
-            assets = _designatedMsgValue;
-
-            _receiveViaMsgValue = false;
-            _designatedMsgValue = 0;
-
-            // deposit everything, excess funds will be refunded in WETH
-            weth.deposit{value: assets}();
-        } else {
-            weth.safeTransferFrom(from, address(this), assets);
-        }
+        // deposit everything, excess funds will be refunded in WETH
+        weth.deposit{value: msg.value}();
 
         uint256 balanceAfter = weth.balanceOf(address(this));
 

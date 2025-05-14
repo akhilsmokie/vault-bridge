@@ -356,10 +356,25 @@ abstract contract VaultBridgeToken is
         (shares,) = _deposit(assets, destinationNetworkId, receiver, forceUpdateGlobalExitRoot, 0);
     }
 
+    // @remind Document (the entire function).
+    function _deposit(
+        uint256 assets,
+        uint32 destinationNetworkId,
+        address receiver,
+        bool forceUpdateGlobalExitRoot,
+        uint256 maxShares
+    ) internal returns (uint256 shares, uint256 spentAssets) {
+        return _depositUsingCustomReceivingFunction(
+            _receiveUnderlyingToken, assets, destinationNetworkId, receiver, forceUpdateGlobalExitRoot, maxShares
+        );
+    }
+
     /// @notice Locks the underlying token, mints vbToken, and optionally bridges it to another network.
     /// @param maxShares Caps the amount of vbToken that is minted. Unused underlying token will be refunded to the sender. Set to `0` to disable.
+    /// @param receiveUnderlyingToken @remind Document.
     /// @dev If bridging to another network, the `receiver` in the ERC-4626 `Deposit` event will be this contract.
-    function _deposit(
+    function _depositUsingCustomReceivingFunction(
+        function(address, uint256) internal receiveUnderlyingToken,
         uint256 assets,
         uint32 destinationNetworkId,
         address receiver,
@@ -374,7 +389,7 @@ abstract contract VaultBridgeToken is
         require(receiver != address(this), InvalidReceiver());
 
         // Transfer the underlying token from the sender to self.
-        _receiveUnderlyingToken(msg.sender, assets);
+        receiveUnderlyingToken(msg.sender, assets);
 
         // Check for a refund.
         if (maxShares > 0) {
@@ -1375,26 +1390,11 @@ abstract contract VaultBridgeToken is
         emit YieldVaultMaximumSlippagePercentageSet(maximumSlippagePercentage);
     }
 
-    // -----================= ::: ADMIN ::: =================-----
-
-    /// @notice Prevents usage of functions with the `whenNotPaused` modifier.
-    /// @notice This function can be called by the pauser only.
-    function pause() external onlyRole(PAUSER_ROLE) nonReentrant {
-        _pause();
-    }
-
-    /// @notice Allows usage of functions with the `whenNotPaused` modifier.
-    /// @notice This function can be called by the owner only.
-    function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant {
-        _unpause();
-    }
-
-    // -----================= ::: DEVELOPER ::: =================-----
+    // -----================= ::: UNDERLYING TOKEN ::: =================-----
 
     /// @notice Transfers the underlying token from an external account to self.
-    /// @dev This function can be overridden to implement custom transfer logic.
     /// @dev @note CAUTION! This function MUST NOT introduce reentrancy/cross-entrancy vulnerabilities.
-    function _receiveUnderlyingToken(address from, uint256 value) internal virtual {
+    function _receiveUnderlyingToken(address from, uint256 value) private {
         VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
 
         // Cache the balance.
@@ -1412,13 +1412,26 @@ abstract contract VaultBridgeToken is
     }
 
     /// @notice Transfers the underlying token to an external account.
-    /// @dev This function can be overridden to implement custom transfer logic.
     /// @dev @note CAUTION! This function MUST NOT introduce reentrancy/cross-entrancy vulnerabilities.
-    function _sendUnderlyingToken(address to, uint256 value) internal virtual {
+    function _sendUnderlyingToken(address to, uint256 value) private {
         VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
 
         // Transfer.
         // @note IMPORTANT: Make sure the underlying token you are integrating does not enable reentrancy on `transfer`.
         $.underlyingToken.safeTransfer(to, value);
+    }
+
+    // -----================= ::: ADMIN ::: =================-----
+
+    /// @notice Prevents usage of functions with the `whenNotPaused` modifier.
+    /// @notice This function can be called by the pauser only.
+    function pause() external onlyRole(PAUSER_ROLE) nonReentrant {
+        _pause();
+    }
+
+    /// @notice Allows usage of functions with the `whenNotPaused` modifier.
+    /// @notice This function can be called by the owner only.
+    function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant {
+        _unpause();
     }
 }
