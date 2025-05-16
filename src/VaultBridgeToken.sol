@@ -451,7 +451,10 @@ abstract contract VaultBridgeToken is
         uint256 reservePercentage_ = reservePercentage();
 
         // @remind Document.
-        if (reservePercentage_ > 3 * $.minimumReservePercentage && reservePercentage_ > 0.1e18) {
+        if (
+            $.minimumReservePercentage < 1e18 && reservePercentage_ > 3 * $.minimumReservePercentage
+                && reservePercentage_ > 0.1e18
+        ) {
             _rebalanceReserve(false, true);
         }
     }
@@ -657,29 +660,31 @@ abstract contract VaultBridgeToken is
             remainingAssets -= amountToWithdraw;
         }
 
-        // Calculate the amount to withdraw from the yield vault.
-        // @note Yield vault usage.
-        uint256 maxWithdraw_ = $.yieldVault.maxWithdraw(address(this));
-
         uint256 receivedAssets;
 
-        // Withdraw the underlying token from the yield vault.
-        if (maxWithdraw_ >= remainingAssets) {
-            // Withdraw to this contract.
-            (, receivedAssets) = _withdrawFromYieldVault(
-                remainingAssets,
-                true,
-                address(this),
-                originalTotalSupply,
-                originalUncollectedYield,
-                originalReservedAssets
-            );
-        } else {
-            // Update the remaining assets.
-            remainingAssets -= maxWithdraw_;
+        if (remainingAssets != 0) {
+            // Calculate the amount to withdraw from the yield vault.
+            // @note Yield vault usage.
+            uint256 maxWithdraw_ = $.yieldVault.maxWithdraw(address(this));
 
-            // Revert because all of the `assets` could not be withdrawn.
-            revert AssetsTooLarge(assets - remainingAssets, assets);
+            // Withdraw the underlying token from the yield vault.
+            if (maxWithdraw_ >= remainingAssets) {
+                // Withdraw to this contract.
+                (, receivedAssets) = _withdrawFromYieldVault(
+                    remainingAssets,
+                    true,
+                    address(this),
+                    originalTotalSupply,
+                    originalUncollectedYield,
+                    originalReservedAssets
+                );
+            } else {
+                // Update the remaining assets.
+                remainingAssets -= maxWithdraw_;
+
+                // Revert because all of the `assets` could not be withdrawn.
+                revert AssetsTooLarge(assets - remainingAssets, assets);
+            }
         }
 
         // Burn vbToken.
@@ -692,7 +697,8 @@ abstract contract VaultBridgeToken is
         emit IERC4626.Withdraw(msg.sender, receiver, owner, assets, shares);
 
         // @remind Document.
-        if (reservePercentage() <= 0.01e18 && $.minimumReservePercentage >= 0.1e18) {
+        if ($.minimumReservePercentage < 1e18 && reservePercentage() <= 0.01e18 && $.minimumReservePercentage >= 0.1e18)
+        {
             _rebalanceReserve(false, false);
         }
     }
