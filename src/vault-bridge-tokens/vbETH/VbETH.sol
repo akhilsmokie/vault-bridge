@@ -99,6 +99,6 @@ contract VbETH is VaultBridgeToken {
 
     /// @inheritdoc IVersioned
     function version() external pure override returns (string memory) {
-        return "1.0.0";
+        return "0.5.0";
     }
 }
