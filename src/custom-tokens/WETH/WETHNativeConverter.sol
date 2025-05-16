@@ -15,6 +15,7 @@ contract WETHNativeConverter is NativeConverter {
     struct WETHNativeConverterStorage {
         WETH _weth;
         bool _gasTokenIsEth;
+        uint256 nonMigratableGasBackingPercentage;
     }
 
     /// @dev The storage slot at which WETHNativeConverter storage starts, following the EIP-7201 standard.
@@ -23,6 +24,9 @@ contract WETHNativeConverter is NativeConverter {
         hex"f9565ea242552c2a1a216404344b0c8f6a3093382a21dd5bd6f5dc2ff1934d00";
 
     error FunctionNotSupportedOnThisNetwork();
+    error InvalidNonMigratableGasBackingPercentage();
+
+    event NonMigratableGasBackingPercentageSet(uint256 nonMigratableGasBackingPercentage_);
 
     modifier onlyIfGasTokenIsEth() {
         WETHNativeConverterStorage storage $ = _getWETHNativeConverterStorage();
@@ -42,7 +46,8 @@ contract WETHNativeConverter is NativeConverter {
         address lxlyBridge_,
         uint32 layerXNetworkId_,
         uint256 nonMigratableBackingPercentage_,
-        address migrationManager_
+        address migrationManager_,
+        uint256 nonMigratableGasBackingPercentage_
     ) external initializer {
         WETHNativeConverterStorage storage $ = _getWETHNativeConverterStorage();
 
@@ -58,9 +63,17 @@ contract WETHNativeConverter is NativeConverter {
             migrationManager_
         );
 
+        require(nonMigratableGasBackingPercentage_ <= 1e18, InvalidNonMigratableBackingPercentage());
+
         $._weth = WETH(payable(customToken_));
         $._gasTokenIsEth =
             ILxLyBridge(lxlyBridge_).gasTokenAddress() == address(0) && ILxLyBridge(lxlyBridge_).gasTokenNetwork() == 0;
+        $.nonMigratableGasBackingPercentage = nonMigratableGasBackingPercentage_;
+    }
+
+    function nonMigratableGasBackingPercentage() public view returns (uint256) {
+        WETHNativeConverterStorage storage $ = _getWETHNativeConverterStorage();
+        return $.nonMigratableGasBackingPercentage;
     }
 
     function _getWETHNativeConverterStorage() private pure returns (WETHNativeConverterStorage storage $) {
@@ -70,8 +83,10 @@ contract WETHNativeConverter is NativeConverter {
     }
 
     function migratableGasBacking() public view returns (uint256) {
+        WETHNativeConverterStorage storage $ = _getWETHNativeConverterStorage();
+
         uint256 nonMigratableGasBacking =
-            _convertToAssets(Math.mulDiv(customToken().totalSupply(), nonMigratableBackingPercentage(), 1e18));
+            _convertToAssets(Math.mulDiv(customToken().totalSupply(), $.nonMigratableGasBackingPercentage, 1e18));
 
         uint256 gasBalance = address(customToken()).balance;
 
@@ -126,6 +141,23 @@ contract WETHNativeConverter is NativeConverter {
     }
 
     receive() external payable whenNotPaused onlyIfGasTokenIsEth {}
+
+    function setNonMigratableGasBackingPercentage(uint256 nonMigratableGasBackingPercentage_)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        nonReentrant
+    {
+        WETHNativeConverterStorage storage $ = _getWETHNativeConverterStorage();
+
+        // Check the input.
+        require(nonMigratableGasBackingPercentage_ <= 1e18, InvalidNonMigratableGasBackingPercentage());
+
+        // Set the non-migratable backing percentage.
+        $.nonMigratableGasBackingPercentage = nonMigratableGasBackingPercentage_;
+
+        // Emit the event.
+        emit NonMigratableGasBackingPercentageSet(nonMigratableGasBackingPercentage_);
+    }
 
     /// @inheritdoc IVersioned
     function version() external pure virtual returns (string memory) {
