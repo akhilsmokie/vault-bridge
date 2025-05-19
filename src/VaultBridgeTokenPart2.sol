@@ -16,7 +16,7 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // @remind Document.
-/// @title Vault Bridge Token: Part 2 (singleton).
+/// @title Vault Bridge Token: Part 2 (singleton)
 contract VaultBridgeTokenPart2 is VaultBridgeToken {
     // Libraries.
     using SafeERC20 for IERC20;
@@ -33,7 +33,7 @@ contract VaultBridgeTokenPart2 is VaultBridgeToken {
         _disableInitializers();
     }
 
-    // -----================= ::: YIELD VAULT ::: =================-----
+    // -----================= ::: VAULT BRIDGE TOKEN ::: =================-----
 
     /// @notice Rebalances the internal reserve by withdrawing the underlying token from, or depositing the underlying token into, the yield vault.
     /// @notice This function can be called by the rebalancer only.

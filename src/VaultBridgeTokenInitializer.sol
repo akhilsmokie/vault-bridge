@@ -29,6 +29,8 @@ contract VaultBridgeTokenInitializer is IVaultBridgeTokenInitializer, VaultBridg
         _disableInitializers();
     }
 
+    // -----================= ::: INITIALIZER ::: =================-----
+
     // @remind Document.
     function initialize(VaultBridgeToken.InitializationParameters calldata initParams)
         external
