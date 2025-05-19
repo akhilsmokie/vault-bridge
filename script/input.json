@@ -1,0 +1,149 @@
+{
+    "1": {
+        "proxyAdmin": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+        "migrationManager": {
+            "ownerMigrationManager": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "lxlyBridge": "0x2a3DD3EB832aF982ec71669E178424b10Dca2EDe"
+        },
+        "vbETH": {
+            "owner": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "name": "VaultBridge ETH",
+            "symbol": "vbETH",
+            "underlyingToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+            "minimumReservePercentage": 0,
+            "yieldVault": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "yieldRecipient": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "lxlyBridge": "using above",
+            "minimumYieldVaultDeposit": 0,
+            "migrationManager": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "yieldVaultMaximumSlippagePercentage": 0
+        },
+        "vbUSDC": {
+            "owner": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "name": "VaultBridge USDC",
+            "symbol": "vbUSDC",
+            "underlyingToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+            "minimumReservePercentage": 0,
+            "yieldVault": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "yieldRecipient": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "lxlyBridge": "using above",
+            "minimumYieldVaultDeposit": 0,
+            "migrationManager": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "yieldVaultMaximumSlippagePercentage": 0
+        },
+        "vbUSDS": {
+            "owner": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "name": "VaultBridge USDS",
+            "symbol": "vbUSDS",
+            "underlyingToken": "0xdc035d45d973e3ec169d2276ddab16f1e407384f",
+            "minimumReservePercentage": 0,
+            "yieldVault": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "yieldRecipient": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "lxlyBridge": "using above",
+            "minimumYieldVaultDeposit": 0,
+            "migrationManager": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "yieldVaultMaximumSlippagePercentage": 0
+        },
+        "vbUSDT": {
+            "owner": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "name": "VaultBridge USDT",
+            "symbol": "vbUSDT",
+            "underlyingToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+            "minimumReservePercentage": 0,
+            "yieldVault": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "yieldRecipient": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "lxlyBridge": "using above",
+            "minimumYieldVaultDeposit": 0,
+            "migrationManager": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "yieldVaultMaximumSlippagePercentage": 0
+        },
+        "vbWBTC": {
+            "owner": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "name": "VaultBridge WBTC",
+            "symbol": "vbWBTC",
+            "underlyingToken": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+            "minimumReservePercentage": 0,
+            "yieldVault": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "yieldRecipient": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "lxlyBridge": "using above",
+            "minimumYieldVaultDeposit": 0,
+            "migrationManager": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "yieldVaultMaximumSlippagePercentage": 0
+        }
+    },
+    "747474": {
+        
+    },
+    "31337": {
+        "proxyAdmin": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+        "migrationManager": {
+            "ownerMigrationManager": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "lxlyBridge": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6"
+        },
+        "vbETH": {
+            "owner": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "name": "VaultBridge ETH",
+            "symbol": "vbETH",
+            "underlyingToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+            "minimumReservePercentage": 0,
+            "yieldVault": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "yieldRecipient": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "lxlyBridge": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "minimumYieldVaultDeposit": 0,
+            "migrationManager": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "yieldVaultMaximumSlippagePercentage": 0
+        },
+        "vbUSDC": {
+            "owner": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "name": "VaultBridge USDC",
+            "symbol": "vbUSDC",
+            "underlyingToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+            "minimumReservePercentage": 0,
+            "yieldVault": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "yieldRecipient": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "lxlyBridge": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "minimumYieldVaultDeposit": 0,
+            "migrationManager": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "yieldVaultMaximumSlippagePercentage": 0
+        },
+        "vbUSDS": {
+            "owner": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "name": "VaultBridge USDS",
+            "symbol": "vbUSDS",
+            "underlyingToken": "0xdc035d45d973e3ec169d2276ddab16f1e407384f",
+            "minimumReservePercentage": 0,
+            "yieldVault": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "yieldRecipient": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "lxlyBridge": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "minimumYieldVaultDeposit": 0,
+            "migrationManager": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "yieldVaultMaximumSlippagePercentage": 0
+        },
+        "vbUSDT": {
+            "owner": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "name": "VaultBridge USDT",
+            "symbol": "vbUSDT",
+            "underlyingToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+            "minimumReservePercentage": 0,
+            "yieldVault": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "yieldRecipient": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "lxlyBridge": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "minimumYieldVaultDeposit": 0,
+            "migrationManager": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "yieldVaultMaximumSlippagePercentage": 0
+        },
+        "vbWBTC": {
+            "owner": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "name": "VaultBridge WBTC",
+            "symbol": "vbWBTC",
+            "underlyingToken": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+            "minimumReservePercentage": 0,
+            "yieldVault": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "yieldRecipient": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "lxlyBridge": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "minimumYieldVaultDeposit": 0,
+            "migrationManager": "0x0000c6A4e8C654dF65503CBb0eDc82B4Ce9158e6",
+            "yieldVaultMaximumSlippagePercentage": 0
+        }
+    }
+}
