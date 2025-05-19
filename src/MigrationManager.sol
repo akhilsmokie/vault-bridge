@@ -16,7 +16,7 @@ import {IVersioned} from "./etc/IVersioned.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @dev External contracts.
-import {VaultBridgeToken} from "./VaultBridgeToken.sol";
+import {VaultBridgeToken, VaultBridgeTokenPart2} from "./VaultBridgeToken.sol";
 import {ILxLyBridge} from "./etc/ILxLyBridge.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -88,6 +88,8 @@ contract MigrationManager is
         uint32 indexed layerYLxlyId, address indexed nativeConverter, address indexed vbToken
     );
 
+    // -----================= ::: COMMON ::: =================-----
+
     /// @dev Checks if the sender is LxLy Bridge.
     modifier onlyLxLyBridge() {
         MigrationManagerStorage storage $ = _getMigrationManagerStorage();
@@ -95,11 +97,13 @@ contract MigrationManager is
         _;
     }
 
+    receive() external payable {}
+
+    // -----================= ::: SETUP ::: =================-----
+
     constructor() {
         _disableInitializers();
     }
-
-    receive() external payable {}
 
     function initialize(address owner_, address lxlyBridge_) external initializer {
         MigrationManagerStorage storage $ = _getMigrationManagerStorage();
@@ -162,7 +166,7 @@ contract MigrationManager is
     function configureNativeConverters(
         uint32[] calldata layerYLxlyIds,
         address[] calldata nativeConverters,
-        address vbToken
+        address payable vbToken
     ) external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant {
         MigrationManagerStorage storage $ = _getMigrationManagerStorage();
 
@@ -275,7 +279,7 @@ contract MigrationManager is
             }
 
             // Complete the migration.
-            vbToken.completeMigration(originNetwork, shares, assets);
+            VaultBridgeTokenPart2(payable(address(vbToken))).completeMigration(originNetwork, shares, assets);
         }
     }
 

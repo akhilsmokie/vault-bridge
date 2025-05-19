@@ -25,14 +25,18 @@ contract VaultBridgeTokenInitializer is IVaultBridgeTokenInitializer, VaultBridg
     // @remind Document.
     address immutable self;
 
-    constructor() {
-        self = address(this);
-    }
+    // -----================= ::: COMMON ::: =================-----
 
     // @remind Document.
     modifier onlyDelegateCall() {
         require(address(this) != self, "Not delegate call");
         _;
+    }
+
+    // -----================= ::: SETUP ::: =================-----
+
+    constructor() {
+        self = address(this);
     }
 
     // @remind Document.
@@ -42,7 +46,6 @@ contract VaultBridgeTokenInitializer is IVaultBridgeTokenInitializer, VaultBridg
         onlyDelegateCall
         onlyInitializing
         nonReentrant
-        returns (bool success)
     {
         VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
 
@@ -94,9 +97,6 @@ contract VaultBridgeTokenInitializer is IVaultBridgeTokenInitializer, VaultBridg
         // Approve the yield vault and LxLy Bridge.
         IERC20(initParams.underlyingToken).forceApprove(initParams.yieldVault, type(uint256).max);
         _approve(address(this), address(initParams.lxlyBridge), type(uint256).max);
-
-        // Indicate successful initialization.
-        return true;
     }
 
     // -----================= ::: INFO ::: =================-----

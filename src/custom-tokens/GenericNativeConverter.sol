@@ -10,6 +10,8 @@ import {IVersioned} from "../etc/IVersioned.sol";
 /// @title Generic Native Converter
 /// @dev This contract can be used to deploy Native Converters that do not require any customization.
 contract GenericNativeConverter is NativeConverter {
+    // -----================= ::: SETUP ::: =================-----
+
     constructor() {
         _disableInitializers();
     }

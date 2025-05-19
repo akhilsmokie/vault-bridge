@@ -7,7 +7,5 @@ import {VaultBridgeToken} from "../VaultBridgeToken.sol";
 // @remind Document.
 interface IVaultBridgeTokenInitializer {
     // @remind Document.
-    function initialize(VaultBridgeToken.InitializationParameters calldata initParams)
-        external
-        returns (bool success);
+    function initialize(VaultBridgeToken.InitializationParameters calldata initParams) external;
 }

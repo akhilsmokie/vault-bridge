@@ -81,6 +81,8 @@ abstract contract NativeConverter is
     event MigrationStarted(uint256 indexed mintedCustomToken, uint256 indexed migratedBacking);
     event NonMigratableBackingPercentageSet(uint256 nonMigratableBackingPercentage);
 
+    // -----================= ::: SETUP ::: =================-----
+
     /// @param originalUnderlyingTokenDecimals_ The number of decimals of the original underlying token on Layer X. The `customToken` and `underlyingToken` MUST have the same number of decimals as the original underlying token. @note (ATTENTION) The decimals of the `customToken` and `underlyingToken` will default to 18 if they revert.
     /// @param customToken_ The token custom mapped to vbToken on LxLy Bridge on Layer Y. Native Converter must be able to mint and burn this token. Please refer to `CustomToken.sol` for more information.
     /// @param underlyingToken_ The token that represents the original underlying token on Layer Y. @note IMPORTANT: This token MUST be either the bridge-wrapped version of the original underlying token, or the original underlying token must be custom mapped to this token on LxLy Bridge on Layer Y.
@@ -472,7 +474,7 @@ abstract contract NativeConverter is
     /// @notice Transfers the underlying token from an external account to itself.
     /// @dev @note CAUTION! This function MUST NOT introduce reentrancy/cross-entrancy vulnerabilities.
     /// @return receivedValue The amount of the underlying actually received (e.g., after transfer fees).
-    function _receiveUnderlyingToken(address from, uint256 value) private returns (uint256 receivedValue) {
+    function _receiveUnderlyingToken(address from, uint256 value) internal returns (uint256 receivedValue) {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
 
         // Cache the balance.
@@ -488,7 +490,7 @@ abstract contract NativeConverter is
 
     /// @notice Transfers the underlying token to an external account.
     /// @dev @note CAUTION! This function MUST NOT introduce reentrancy/cross-entrancy vulnerabilities.
-    function _sendUnderlyingToken(address to, uint256 value) private {
+    function _sendUnderlyingToken(address to, uint256 value) internal {
         NativeConverterStorage storage $ = _getNativeConverterStorage();
 
         // Transfer.

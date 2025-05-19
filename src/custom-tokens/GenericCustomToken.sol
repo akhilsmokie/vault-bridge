@@ -10,6 +10,8 @@ import {IVersioned} from "../etc/IVersioned.sol";
 /// @title Generic Custom Token
 /// @dev This contract can be used to deploy Custom Tokens that do not require any customization.
 contract GenericCustomToken is CustomToken {
+    // -----================= ::: SETUP ::: =================-----
+
     constructor() {
         _disableInitializers();
     }

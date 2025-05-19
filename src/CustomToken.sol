@@ -50,8 +50,11 @@ abstract contract CustomToken is
     error InvalidLxLyBridge();
     error InvalidNativeConverter();
 
-    /// @dev Checks if the sender has the permission to mint and burn Custom Token.
-    modifier onlyMinterBurner() {
+    // -----================= ::: COMMON ::: =================-----
+
+    /// @dev Checks if the sender is LxLy Bridge or Native Converter.
+    /// @dev This modifier is used to restrict the minting and burning of Custom Token.
+    modifier onlyLxlyBridgeAndNativeConverter() {
         CustomTokenStorage storage $ = _getCustomTokenStorage();
 
         // Only LxLy Bridge and Native Converter can mint and burn Custom Token.
@@ -59,6 +62,8 @@ abstract contract CustomToken is
 
         _;
     }
+
+    // -----================= ::: SETUP ::: =================-----
 
     /// @param originalUnderlyingTokenDecimals_ The number of decimals of the original underlying token on Layer X. Custom Token will have the same number of decimals as the original underlying token.
     /// @param nativeConverter_ The address of Native Converter for this Custom Token.
@@ -165,13 +170,23 @@ abstract contract CustomToken is
 
     /// @notice Mints Custom Tokens to the recipient.
     /// @notice This function can be called by LxLy Bridge and Native Converter only.
-    function mint(address account, uint256 value) external whenNotPaused onlyMinterBurner nonReentrant {
+    function mint(address account, uint256 value)
+        external
+        whenNotPaused
+        onlyLxlyBridgeAndNativeConverter
+        nonReentrant
+    {
         _mint(account, value);
     }
 
     /// @notice Burns Custom Tokens from a holder.
     /// @notice This function can be called by LxLy Bridge and Native Converter only.
-    function burn(address account, uint256 value) external whenNotPaused onlyMinterBurner nonReentrant {
+    function burn(address account, uint256 value)
+        external
+        whenNotPaused
+        onlyLxlyBridgeAndNativeConverter
+        nonReentrant
+    {
         _burn(account, value);
     }
 
