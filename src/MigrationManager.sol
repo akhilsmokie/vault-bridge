@@ -16,7 +16,8 @@ import {IVersioned} from "./etc/IVersioned.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @dev External contracts.
-import {VaultBridgeToken, VaultBridgeTokenPart2} from "./VaultBridgeToken.sol";
+import {VaultBridgeToken} from "./VaultBridgeToken.sol";
+import {VaultBridgeTokenPart2} from "./VaultBridgeTokenPart2.sol";
 import {ILxLyBridge} from "./etc/ILxLyBridge.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -300,7 +301,7 @@ contract MigrationManager is
     // -----================= ::: INFO ::: =================-----
 
     /// @inheritdoc IVersioned
-    function version() external pure virtual returns (string memory) {
+    function version() external pure returns (string memory) {
         return "0.5.0";
     }
 }

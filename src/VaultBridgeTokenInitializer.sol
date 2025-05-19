@@ -3,9 +3,9 @@ pragma solidity 0.8.29;
 
 // Main functionality.
 import {IVaultBridgeTokenInitializer} from "./etc/IVaultBridgeTokenInitializer.sol";
+import {VaultBridgeToken} from "./VaultBridgeToken.sol";
 
 // Other functionality.
-import {VaultBridgeToken} from "./VaultBridgeToken.sol";
 import {IVersioned} from "./etc/IVersioned.sol";
 
 // Libraries.
@@ -18,32 +18,21 @@ import {ILxLyBridge} from "./etc/ILxLyBridge.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // @remind Document.
+// @title Vault Bridge Token: Initializer (singleton)
 contract VaultBridgeTokenInitializer is IVaultBridgeTokenInitializer, VaultBridgeToken {
     // Libraries.
     using SafeERC20 for IERC20;
 
-    // @remind Document.
-    address immutable self;
-
-    // -----================= ::: COMMON ::: =================-----
-
-    // @remind Document.
-    modifier onlyDelegateCall() {
-        require(address(this) != self, "Not delegate call");
-        _;
-    }
-
     // -----================= ::: SETUP ::: =================-----
 
     constructor() {
-        self = address(this);
+        _disableInitializers();
     }
 
     // @remind Document.
     function initialize(VaultBridgeToken.InitializationParameters calldata initParams)
         external
         override
-        onlyDelegateCall
         onlyInitializing
         nonReentrant
     {
@@ -60,6 +49,7 @@ contract VaultBridgeTokenInitializer is IVaultBridgeTokenInitializer, VaultBridg
         require(initParams.lxlyBridge != address(0), InvalidLxLyBridge());
         require(initParams.migrationManager != address(0), InvalidMigrationManager());
         require(initParams.yieldVaultMaximumSlippagePercentage <= 1e18, InvalidYieldVaultMaximumSlippagePercentage());
+        require(initParams.vaultBridgeTokenPart2 != address(0), InvalidVaultBridgeTokenPart2());
 
         // Initialize the inherited contracts.
         __ERC20_init(initParams.name, initParams.symbol);
@@ -102,7 +92,7 @@ contract VaultBridgeTokenInitializer is IVaultBridgeTokenInitializer, VaultBridg
     // -----================= ::: INFO ::: =================-----
 
     /// @inheritdoc IVersioned
-    function version() external pure virtual returns (string memory) {
+    function version() external pure returns (string memory) {
         return "0.5.0";
     }
 }
