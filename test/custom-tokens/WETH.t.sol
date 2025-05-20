@@ -72,7 +72,7 @@ contract WETHTest is Test {
     }
 
     function test_wETH_version() public view {
-        assertEq(wETH.version(), "1.0.0");
+        assertEq(wETH.version(), "0.5.0");
     }
 
     function test_onlyIfGasTokenIsEth() public {
@@ -103,7 +103,7 @@ contract WETHTest is Test {
     function _deployWETH(address _lxlyBridge) internal {
         wETH = new WETH();
         bytes memory initData = abi.encodeCall(
-            WETH.initialize, (address(this), "wETH", "wETH", 18, _lxlyBridge, calculatedNativeConverterAddr)
+            WETH.reinitialize, (address(this), "wETH", "wETH", 18, _lxlyBridge, calculatedNativeConverterAddr)
         );
         wETH = WETH(payable(address(new TransparentUpgradeableProxy(address(wETH), address(this), initData))));
     }

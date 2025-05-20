@@ -85,7 +85,7 @@ contract MigrationManagerTest is Test {
         vm.label(address(migrationManager), "Migration Manager");
         vm.label(address(owner), "Owner");
         vm.label(address(underlyingToken), "Underlying Token");
-        vm.label(address(vbToken), "VbToken");
+        vm.label(payable(address(vbToken)), "VbToken");
         vm.label(migrationManagerImpl, "Migration Manager Impl");
         vm.label(nativeConverter, "Native Converter");
     }
@@ -115,7 +115,7 @@ contract MigrationManagerTest is Test {
 
         // test pause and unpause
         bytes memory callData = abi.encodeCall(
-            migrationManager.configureNativeConverters, (layerYLxlyIds, nativeConverters, address(vbToken))
+            migrationManager.configureNativeConverters, (layerYLxlyIds, nativeConverters, payable(address(vbToken)))
         );
         _testPauseUnpause(owner, address(migrationManager), callData);
 
@@ -127,34 +127,34 @@ contract MigrationManagerTest is Test {
                 migrationManager.DEFAULT_ADMIN_ROLE()
             )
         );
-        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, address(vbToken));
+        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, payable(address(vbToken)));
 
         vm.startPrank(owner);
 
         // test mismatched inputs: layerYLxlyIds
         vm.expectRevert(MigrationManager.NonMatchingInputLengths.selector);
-        migrationManager.configureNativeConverters(new uint32[](2), nativeConverters, address(vbToken));
+        migrationManager.configureNativeConverters(new uint32[](2), nativeConverters, payable(address(vbToken)));
 
         // test mismatched inputs: nativeConverters
         vm.expectRevert(MigrationManager.NonMatchingInputLengths.selector);
-        migrationManager.configureNativeConverters(layerYLxlyIds, new address[](2), address(vbToken));
+        migrationManager.configureNativeConverters(layerYLxlyIds, new address[](2), payable(address(vbToken)));
 
         // test invalid layerYLxlyId
         layerYLxlyIds[0] = NETWORK_ID_X;
         vm.expectRevert(MigrationManager.InvalidLayerYLxLyId.selector);
-        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, address(vbToken));
+        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, payable(address(vbToken)));
 
         // test invalid native converter
         layerYLxlyIds[0] = NETWORK_ID_Y;
         nativeConverters[0] = address(0);
         vm.expectRevert(MigrationManager.InvalidNativeConverter.selector);
-        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, address(vbToken));
+        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, payable(address(vbToken)));
 
         // test invalid underlying token
         nativeConverters[0] = nativeConverter;
         vbToken.setUnderlyingToken(address(0));
         vm.expectRevert(MigrationManager.InvalidUnderlyingToken.selector);
-        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, address(vbToken));
+        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, payable(address(vbToken)));
 
         vbToken.setUnderlyingToken(address(underlyingToken));
 
@@ -169,9 +169,9 @@ contract MigrationManagerTest is Test {
 
         // configure native converter
         vm.expectEmit();
-        emit MigrationManager.NativeConverterConfigured(NETWORK_ID_Y, nativeConverter, address(vbToken));
+        emit MigrationManager.NativeConverterConfigured(NETWORK_ID_Y, nativeConverter, (address(vbToken)));
         vm.startPrank(owner);
-        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, address(vbToken));
+        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, payable(address(vbToken)));
 
         MigrationManager.TokenPair memory tokenPair =
             migrationManager.nativeConvertersConfiguration(NETWORK_ID_Y, nativeConverter);
@@ -186,20 +186,22 @@ contract MigrationManagerTest is Test {
         newVbToken.setUnderlyingToken(address(newUnderlyingToken));
 
         vm.expectEmit();
-        emit MigrationManager.NativeConverterConfigured(NETWORK_ID_Y, nativeConverter, address(newVbToken));
-        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, address(newVbToken));
+        emit MigrationManager.NativeConverterConfigured(NETWORK_ID_Y, nativeConverter, payable(address(newVbToken)));
+        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, payable(address(newVbToken)));
 
         tokenPair = migrationManager.nativeConvertersConfiguration(NETWORK_ID_Y, nativeConverter);
 
         assertEq(address(tokenPair.vbToken), address(newVbToken));
         assertEq(address(tokenPair.underlyingToken), address(newUnderlyingToken));
-        assertEq(underlyingToken.allowance(address(migrationManager), address(vbToken)), 0);
-        assertEq(newUnderlyingToken.allowance(address(migrationManager), address(newVbToken)), type(uint256).max);
+        assertEq(underlyingToken.allowance(address(migrationManager), payable(address(vbToken))), 0);
+        assertEq(
+            newUnderlyingToken.allowance(address(migrationManager), payable(address(newVbToken))), type(uint256).max
+        );
 
         // unset vbToken
         vm.expectEmit();
         emit MigrationManager.NativeConverterConfigured(NETWORK_ID_Y, nativeConverter, address(0));
-        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, address(0));
+        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, payable(address(0)));
 
         tokenPair = migrationManager.nativeConvertersConfiguration(NETWORK_ID_Y, nativeConverter);
         assertEq(address(tokenPair.vbToken), address(0));
@@ -234,7 +236,7 @@ contract MigrationManagerTest is Test {
         migrationManager.onMessageReceived(nativeConverter, NETWORK_ID_Y, data);
 
         vm.prank(owner);
-        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, address(vbToken));
+        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, payable(address(vbToken)));
 
         // test unwrapped native token
         vm.prank(address(lxlyBridge));
@@ -245,7 +247,7 @@ contract MigrationManagerTest is Test {
         MockERC20WithDeposit mockERC20WithDeposit = new MockERC20WithDeposit("Mock ERC20", "MERC20");
         vbToken.setUnderlyingToken(address(mockERC20WithDeposit));
         vm.prank(owner);
-        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, address(vbToken));
+        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, payable(address(vbToken)));
         deal(address(lxlyBridge), 100);
 
         bytes memory onMessageReceivedCallData =
@@ -265,13 +267,13 @@ contract MigrationManagerTest is Test {
         nativeConverters[0] = nativeConverter;
 
         vm.prank(owner);
-        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, address(vbToken));
+        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, payable(address(vbToken)));
 
         MockERC20WithDeposit mockERC20WithDeposit = new MockERC20WithDeposit("Mock ERC20", "MERC20");
         mockERC20WithDeposit.setCanDeposit(true);
         vbToken.setUnderlyingToken(address(mockERC20WithDeposit));
         vm.prank(owner);
-        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, address(vbToken));
+        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, payable(address(vbToken)));
 
         deal(address(lxlyBridge), 100);
 
