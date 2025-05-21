@@ -44,7 +44,7 @@ contract LXLYBridgeMock {
 contract WETHNativeConverterTest is Test, GenericNativeConverterTest {
     uint256 constant MAX_NON_MIGRATABLE_GAS_BACKING_PERCENTAGE = 1e17;
 
-    MockERC20 internal wWETH;
+    MockERC20MintableBurnable internal wWETH;
     WETH internal wETH;
     LXLYBridgeMock internal lxlyBridgeMock;
     address internal migrationManager_ = makeAddr("migrationManager");
@@ -55,7 +55,7 @@ contract WETHNativeConverterTest is Test, GenericNativeConverterTest {
         zkevmFork = vm.createSelectFork("polygon_zkevm", 19164969);
 
         // Setup tokens
-        wWETH = new MockERC20();
+        wWETH = new MockERC20MintableBurnable();
         wWETH.initialize("Wrapped WETH", "wWETH", 18);
         wETH = new WETH();
         address calculatedNativeConverterAddr = vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 2);
@@ -67,7 +67,7 @@ contract WETHNativeConverterTest is Test, GenericNativeConverterTest {
 
         // assign addresses for generic testing
         customToken = MockERC20MintableBurnable(address(wETH));
-        underlyingToken = MockERC20(address(wWETH));
+        underlyingToken = MockERC20MintableBurnable(address(wWETH));
         migrationManager = migrationManager_;
 
         underlyingTokenMetadata = abi.encode("Wrapped WETH", "wWETH", 18);
