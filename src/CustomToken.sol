@@ -50,7 +50,7 @@ abstract contract CustomToken is
     error InvalidLxLyBridge();
     error InvalidNativeConverter();
 
-    // -----================= ::: COMMON ::: =================-----
+    // -----================= ::: MODIFIERS ::: =================-----
 
     /// @dev Checks if the sender is LxLy Bridge or Native Converter.
     /// @dev This modifier is used to restrict the minting and burning of Custom Token.

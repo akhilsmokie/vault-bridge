@@ -157,7 +157,7 @@ abstract contract VaultBridgeToken is
     event YieldVaultSet(address yieldVault);
     event YieldVaultMaximumSlippagePercentageSet(uint256 slippagePercentage);
 
-    // -----================= ::: COMMON ::: =================-----
+    // -----================= ::: MODIFIERS ::: =================-----
 
     /// @dev Checks if the sender is the yield recipient.
     modifier onlyYieldRecipient() {
@@ -186,25 +186,6 @@ abstract contract VaultBridgeToken is
         _;
     }
 
-    // @remind Document.
-    receive() external payable {}
-
-    // @remind Document (the entire function).
-    fallback() external payable virtual {
-        VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
-
-        address vaultBridgeTokenPart2 = $._vaultBridgeTokenPart2;
-
-        assembly {
-            calldatacopy(0, 0, calldatasize())
-            let success := delegatecall(gas(), vaultBridgeTokenPart2, 0, calldatasize(), 0, 0)
-            returndatacopy(0, 0, returndatasize())
-            switch success
-            case 0 { revert(0, returndatasize()) }
-            default { return(0, returndatasize()) }
-        }
-    }
-
     // -----================= ::: SETUP ::: =================-----
 
     // @remind Document.
@@ -224,6 +205,27 @@ abstract contract VaultBridgeToken is
             assembly ("memory-safe") {
                 revert(add(32, data), mload(data))
             }
+        }
+    }
+
+    // -----================= ::: SOLIDITY ::: =================-----
+
+    // @remind Document.
+    receive() external payable {}
+
+    // @remind Document (the entire function).
+    fallback() external payable virtual {
+        VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
+
+        address vaultBridgeTokenPart2 = $._vaultBridgeTokenPart2;
+
+        assembly {
+            calldatacopy(0, 0, calldatasize())
+            let success := delegatecall(gas(), vaultBridgeTokenPart2, 0, calldatasize(), 0, 0)
+            returndatacopy(0, 0, returndatasize())
+            switch success
+            case 0 { revert(0, returndatasize()) }
+            default { return(0, returndatasize()) }
         }
     }
 
@@ -599,7 +601,6 @@ abstract contract VaultBridgeToken is
         remainingAssets -= $.reservedAssets;
 
         // Simulate withdrawal from the yield vault.
-        // @note Yield vault usage.
         uint256 maxWithdraw_ = $.yieldVault.maxWithdraw(address(this));
         maxWithdraw_ = remainingAssets > maxWithdraw_ ? maxWithdraw_ : remainingAssets;
         uint256 burnedYieldVaultShares;
@@ -686,7 +687,6 @@ abstract contract VaultBridgeToken is
 
         if (remainingAssets != 0) {
             // Calculate the amount to withdraw from the yield vault.
-            // @note Yield vault usage.
             uint256 maxWithdraw_ = $.yieldVault.maxWithdraw(address(this));
 
             // Withdraw the underlying token from the yield vault.
@@ -986,7 +986,6 @@ abstract contract VaultBridgeToken is
         uint256 originalAssets = assets;
 
         // Get the yield vault's deposit limit.
-        // @note Yield vault usage.
         uint256 maxDeposit_ = $.yieldVault.maxDeposit(address(this));
 
         // @remind Document.
@@ -1078,7 +1077,6 @@ abstract contract VaultBridgeToken is
         VaultBridgeTokenStorage storage $ = _getVaultBridgeTokenStorage();
 
         // Get the yield vault's withdraw limit.
-        // @note Yield vault usage.
         uint256 maxWithdraw_ = $.yieldVault.maxWithdraw(address(this));
 
         // @remind Document.

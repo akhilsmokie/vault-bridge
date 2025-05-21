@@ -21,16 +21,16 @@ contract VaultBridgeTokenPart2 is VaultBridgeToken {
     // Libraries.
     using SafeERC20 for IERC20;
 
-    // -----================= ::: COMMON ::: =================-----
-
-    fallback() external payable override {
-        revert UnknownFunction(bytes4(msg.data));
-    }
-
     // -----================= ::: SETUP ::: =================-----
 
     constructor() {
         _disableInitializers();
+    }
+
+    // -----================= ::: SOLIDITY ::: =================-----
+
+    fallback() external payable override {
+        revert UnknownFunction(bytes4(msg.data));
     }
 
     // -----================= ::: VAULT BRIDGE TOKEN ::: =================-----

@@ -89,7 +89,7 @@ contract MigrationManager is
         uint32 indexed layerYLxlyId, address indexed nativeConverter, address indexed vbToken
     );
 
-    // -----================= ::: COMMON ::: =================-----
+    // -----================= ::: MODIFIERS ::: =================-----
 
     /// @dev Checks if the sender is LxLy Bridge.
     modifier onlyLxLyBridge() {
@@ -97,8 +97,6 @@ contract MigrationManager is
         require(msg.sender == address($.lxlyBridge), Unauthorized());
         _;
     }
-
-    receive() external payable {}
 
     // -----================= ::: SETUP ::: =================-----
 
@@ -128,6 +126,10 @@ contract MigrationManager is
         $.lxlyBridge = ILxLyBridge(lxlyBridge_);
         $._lxlyId = $.lxlyBridge.networkID();
     }
+
+    // -----================= ::: SOLIDITY ::: =================-----
+
+    receive() external payable {}
 
     // -----================= ::: STORAGE ::: =================-----
 
