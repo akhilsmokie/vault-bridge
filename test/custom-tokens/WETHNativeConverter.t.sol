@@ -65,11 +65,10 @@ contract WETHNativeConverterTest is Test, GenericNativeConverterTest {
         );
         wETH = WETH(payable(address(new TransparentUpgradeableProxy(address(wETH), address(this), initData))));
 
-        // assign addresses for generic testing
+        // assign variables for generic testing
         customToken = MockERC20MintableBurnable(address(wETH));
         underlyingToken = MockERC20MintableBurnable(address(wWETH));
         migrationManager = migrationManager_;
-
         underlyingTokenMetadata = abi.encode("Wrapped WETH", "wWETH", 18);
 
         // Deploy and initialize converter
@@ -95,6 +94,8 @@ contract WETHNativeConverterTest is Test, GenericNativeConverterTest {
         );
         nativeConverter = GenericNativeConverter(_proxify(address(nativeConverter), address(this), initData));
         assertEq(address(nativeConverter), calculatedNativeConverterAddr);
+
+        _mapCustomToken(originUnderlyingToken, address(wWETH), false);
 
         wETHConverter = WETHNativeConverter(payable(address(nativeConverter)));
 
