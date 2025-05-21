@@ -23,14 +23,14 @@ contract VbETH is VaultBridgeToken {
         external
         initializer
     {
+        // Initialize the base implementation.
+        __VaultBridgeToken_init(initializer_, initParams);
+
         require(
             ILxLyBridge(initParams.lxlyBridge).gasTokenAddress() == address(0)
                 && ILxLyBridge(initParams.lxlyBridge).gasTokenNetwork() == 0,
             ContractNotSupportedOnThisNetwork()
         );
-
-        // Initialize the base implementation.
-        __VaultBridgeToken_init(initializer_, initParams);
     }
 
     /// @dev deposit ETH to get vbETH
