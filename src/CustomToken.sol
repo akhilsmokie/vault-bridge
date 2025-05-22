@@ -1,4 +1,4 @@
-//
+// SPDX-License-Identifier: LicenseRef-PolygonLabs-Open-Attribution OR LicenseRef-PolygonLabs-Source-Available
 pragma solidity 0.8.29;
 
 // Main functionality.
@@ -13,9 +13,10 @@ import {ReentrancyGuardUpgradeable} from "@openzeppelin-contracts-upgradeable/ut
 import {IVersioned} from "./etc/IVersioned.sol";
 
 /// @title Custom Token
+/// @author See https://github.com/agglayer/vault-bridge
 /// @notice A Custom Token is an ERC-20 token deployed on Layer Ys to represent the native version of the original underlying token from Layer X on Layer Y.
 /// @dev A base contract used to create Custom Tokens.
-/// @dev @note IMPROTANT: Custom Token MUST be custom mapped to the corresponding vbToken on LxLy Bridge on Layer Y and MUST give the minting and burning permission to LxLy Bridge and Native Converter. It MAY have a transfer fee.
+/// @dev @note IMPORTANT: Custom Token MUST be custom mapped to the corresponding vbToken on LxLy Bridge on Layer Y and MUST give the minting and burning permission to LxLy Bridge and Native Converter. It MAY have a transfer fee.
 abstract contract CustomToken is
     Initializable,
     AccessControlUpgradeable,
@@ -26,19 +27,17 @@ abstract contract CustomToken is
 {
     /// @dev Storage of Custom Token contract.
     /// @dev It's implemented on a custom ERC-7201 namespace to reduce the risk of storage collisions when using with upgradeable contracts.
-    /// @custom:storage-location erc7201:0xpolygon.storage.CustomToken
+    /// @custom:storage-location erc7201:agglayer.vault-bridge.CustomToken.storage
     struct CustomTokenStorage {
         uint8 decimals;
         address lxlyBridge;
         address nativeConverter;
     }
 
-    // @todo Change the namespace. If upgrading the testnet contracts, add a reinitializer and clean the old slots using assembly.
-    // @todo The value has been modified from `0x5bbe451cf8915ac9b43b69d5987da5a42549d90a2c7cab500dae45ea6889c900`, which was incorrect. If upgrading the testnet contracts, add a reinitializer and clean the old slots using assembly.
     /// @dev The storage slot at which Custom Token storage starts, following the EIP-7201 standard.
-    /// @dev Calculated as `keccak256(abi.encode(uint256(keccak256("0xpolygon.storage.CustomToken")) - 1)) & ~bytes32(uint256(0xff))`.
+    /// @dev Calculated as `keccak256(abi.encode(uint256(keccak256("agglayer.vault-bridge.CustomToken.storage")) - 1)) & ~bytes32(uint256(0xff))`.
     bytes32 private constant _CUSTOM_TOKEN_STORAGE =
-        hex"7c85b7b2d9fd038d6192406f4d8c0b3abd3ba313fe130017505dbec645b26600";
+        hex"0300d81ec8b5c42d6bd2cedd81ce26f1003c52753656b7512a8eef168b702500";
 
     // Basic roles.
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
@@ -52,8 +51,11 @@ abstract contract CustomToken is
     error InvalidLxLyBridge();
     error InvalidNativeConverter();
 
-    /// @dev Checks if the sender has the permission to mint and burn Custom Token.
-    modifier onlyMinterBurner() {
+    // -----================= ::: MODIFIERS ::: =================-----
+
+    /// @dev Checks if the sender is LxLy Bridge or Native Converter.
+    /// @dev This modifier is used to restrict the minting and burning of Custom Token.
+    modifier onlyLxlyBridgeAndNativeConverter() {
         CustomTokenStorage storage $ = _getCustomTokenStorage();
 
         // Only LxLy Bridge and Native Converter can mint and burn Custom Token.
@@ -61,6 +63,8 @@ abstract contract CustomToken is
 
         _;
     }
+
+    // -----================= ::: SETUP ::: =================-----
 
     /// @param originalUnderlyingTokenDecimals_ The number of decimals of the original underlying token on Layer X. Custom Token will have the same number of decimals as the original underlying token.
     /// @param nativeConverter_ The address of Native Converter for this Custom Token.
@@ -88,6 +92,9 @@ abstract contract CustomToken is
         __AccessControl_init();
         __Pausable_init();
         __ReentrancyGuard_init();
+        __Context_init();
+        __ERC165_init();
+        __Nonces_init();
 
         // Grant the basic roles.
         _grantRole(DEFAULT_ADMIN_ROLE, owner_);
@@ -164,13 +171,23 @@ abstract contract CustomToken is
 
     /// @notice Mints Custom Tokens to the recipient.
     /// @notice This function can be called by LxLy Bridge and Native Converter only.
-    function mint(address account, uint256 value) external whenNotPaused onlyMinterBurner nonReentrant {
+    function mint(address account, uint256 value)
+        external
+        whenNotPaused
+        onlyLxlyBridgeAndNativeConverter
+        nonReentrant
+    {
         _mint(account, value);
     }
 
     /// @notice Burns Custom Tokens from a holder.
     /// @notice This function can be called by LxLy Bridge and Native Converter only.
-    function burn(address account, uint256 value) external whenNotPaused onlyMinterBurner nonReentrant {
+    function burn(address account, uint256 value)
+        external
+        whenNotPaused
+        onlyLxlyBridgeAndNativeConverter
+        nonReentrant
+    {
         _burn(account, value);
     }
 

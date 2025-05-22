@@ -1,4 +1,4 @@
-//
+// SPDX-License-Identifier: LicenseRef-PolygonLabs-Open-Attribution OR LicenseRef-PolygonLabs-Source-Available
 pragma solidity 0.8.29;
 
 // Main functionality.
@@ -8,8 +8,11 @@ import {NativeConverter} from "../NativeConverter.sol";
 import {IVersioned} from "../etc/IVersioned.sol";
 
 /// @title Generic Native Converter
+/// @author See https://github.com/agglayer/vault-bridge
 /// @dev This contract can be used to deploy Native Converters that do not require any customization.
 contract GenericNativeConverter is NativeConverter {
+    // -----================= ::: SETUP ::: =================-----
+
     constructor() {
         _disableInitializers();
     }
@@ -41,6 +44,6 @@ contract GenericNativeConverter is NativeConverter {
 
     /// @inheritdoc IVersioned
     function version() external pure virtual returns (string memory) {
-        return "1.0.0";
+        return "0.5.0";
     }
 }

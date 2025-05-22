@@ -1,4 +1,4 @@
-//
+// SPDX-License-Identifier: LicenseRef-PolygonLabs-Open-Attribution OR LicenseRef-PolygonLabs-Source-Available
 pragma solidity 0.8.29;
 
 // Main functionality.
@@ -8,6 +8,7 @@ import {VaultBridgeToken} from "../VaultBridgeToken.sol";
 import {IVersioned} from "../etc/IVersioned.sol";
 
 /// @title Generic Vault Bridge Token
+/// @author See https://github.com/agglayer/vault-bridge
 /// @dev This contract can be used to deploy vbTokens that do not require any customization.
 contract GenericVaultBridgeToken is VaultBridgeToken {
     constructor() {
@@ -26,6 +27,6 @@ contract GenericVaultBridgeToken is VaultBridgeToken {
 
     /// @inheritdoc IVersioned
     function version() external pure virtual returns (string memory) {
-        return "1.0.0";
+        return "0.5.0";
     }
 }

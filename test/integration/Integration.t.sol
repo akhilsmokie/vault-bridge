@@ -1,4 +1,4 @@
-//
+// SPDX-License-Identifier: LicenseRef-PolygonLabs-Open-Attribution OR LicenseRef-PolygonLabs-Source-Available
 pragma solidity ^0.8.29;
 
 import "forge-std/Test.sol";
@@ -12,80 +12,14 @@ import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transpa
 import {TestVault} from "test/etc/TestVault.sol";
 import {ZkEVMCommon} from "test/etc/ZkEVMCommon.sol";
 import {VaultBridgeTokenInitializer} from "src/VaultBridgeTokenInitializer.sol";
+import {GenericVaultBridgeToken} from "src/vault-bridge-tokens/GenericVaultBridgeToken.sol";
+import {VaultBridgeTokenPart2} from "src/VaultBridgeTokenPart2.sol";
+import {GenericNativeConverter} from "src/custom-tokens/GenericNativeConverter.sol";
+import {GenericCustomToken} from "src/custom-tokens/GenericCustomToken.sol";
 
 import {IBridgeL2SovereignChain} from "test/interfaces/IBridgeL2SovereignChain.sol";
 import {ILxLyBridge as _ILxLyBridge} from "test/interfaces/ILxLyBridge.sol";
 import {IPolygonZkEVMGlobalExitRoot} from "test/interfaces/IPolygonZkEVMGlobalExitRoot.sol";
-
-// MOCKS
-contract MockVbToken is VaultBridgeToken {
-    constructor() {
-        _disableInitializers();
-    }
-
-    function initialize(address initializer_, InitializationParameters calldata initParams) external initializer {
-        __VaultBridgeToken_init(initializer_, initParams);
-    }
-
-    function version() external pure virtual returns (string memory) {
-        return "1.0.0";
-    }
-}
-
-contract MockNativeConverter is NativeConverter {
-    constructor() {
-        _disableInitializers();
-    }
-
-    function initialize(
-        address owner_,
-        uint8 originalUnderlyingTokenDecimals_,
-        address customToken_,
-        address underlyingToken_,
-        address lxlyBridge_,
-        uint32 layerXLxlyId_,
-        uint256 maxNonMigratableBackingPercentage_,
-        address migrationManager_
-    ) external initializer {
-        // Initialize the base implementation.
-        __NativeConverter_init(
-            owner_,
-            originalUnderlyingTokenDecimals_,
-            customToken_,
-            underlyingToken_,
-            lxlyBridge_,
-            layerXLxlyId_,
-            maxNonMigratableBackingPercentage_,
-            migrationManager_
-        );
-    }
-
-    function version() external pure virtual returns (string memory) {
-        return "1.0.0";
-    }
-}
-
-contract MockCustomToken is CustomToken {
-    constructor() {
-        _disableInitializers();
-    }
-
-    function initialize(
-        address owner_,
-        string calldata name_,
-        string calldata symbol_,
-        uint8 originalUnderlyingTokenDecimals_,
-        address lxlyBridge_,
-        address nativeConverter_
-    ) external initializer {
-        // Initialize the base implementation.
-        __CustomToken_init(owner_, name_, symbol_, originalUnderlyingTokenDecimals_, lxlyBridge_, nativeConverter_);
-    }
-
-    function version() external pure virtual returns (string memory) {
-        return "1.0.0";
-    }
-}
 
 contract UnderlyingAsset is ERC20 {
     constructor(string memory name, string memory symbol) ERC20(name, symbol) {}
@@ -217,10 +151,11 @@ contract IntegrationTest is Test, ZkEVMCommon {
     uint256 constant MAX_NON_MIGRATABLE_BACKING_PERCENTAGE = 1e17;
     uint256 internal constant MAX_DEPOSIT = 10e18;
     uint256 internal constant MAX_WITHDRAW = 10e18;
+    uint256 internal constant YIELD_VAULT_ALLOWED_SLIPPAGE = 1e16; // 1%
 
     // extra contracts
     TestVault vbTokenVault;
-    MockNativeConverter nativeConverter;
+    GenericNativeConverter nativeConverter;
     MigrationManager migrationManager;
 
     // dummy addresses
@@ -246,7 +181,8 @@ contract IntegrationTest is Test, ZkEVMCommon {
     bytes bwUnderlyingAssetMetaData = abi.encode("", "", 18);
 
     // vbToken
-    MockVbToken vbToken;
+    GenericVaultBridgeToken vbToken;
+    VaultBridgeTokenPart2 vbTokenPart2;
     uint256 internal constant MINIMUM_RESERVE_PERCENTAGE = 1e17;
     string internal constant VBTOKEN_NAME = "Vault Bridge Token";
     string internal constant VBTOKEN_SYMBOL = "VBTK";
@@ -255,7 +191,7 @@ contract IntegrationTest is Test, ZkEVMCommon {
     bytes vbTokenMetaData = abi.encode(VBTOKEN_NAME, VBTOKEN_SYMBOL, VBTOKEN_DECIMALS);
 
     // custom token
-    MockCustomToken customToken;
+    GenericCustomToken customToken;
     string internal constant CUSTOM_TOKEN_NAME = "Custom Token";
     string internal constant CUSTOM_TOKEN_SYMBOL = "CT";
     uint8 internal constant CUSTOM_TOKEN_DECIMALS = 18;
@@ -316,17 +252,20 @@ contract IntegrationTest is Test, ZkEVMCommon {
         vbTokenVault.setMaxWithdraw(MAX_WITHDRAW);
 
         // calculate native converter address
-        uint256 nativeConverterNonce = vm.getNonce(address(this)) + 8;
+        uint256 nativeConverterNonce = vm.getNonce(address(this)) + 9;
         address nativeConverterAddr = vm.computeCreateAddress(address(this), nativeConverterNonce);
 
         address initializer = address(new VaultBridgeTokenInitializer());
 
         // calculate migration manager address
-        uint256 migrationManagerNonce = vm.getNonce(address(this)) + 3;
+        uint256 migrationManagerNonce = vm.getNonce(address(this)) + 4;
         address migrationManagerAddr = vm.computeCreateAddress(address(this), migrationManagerNonce);
 
+        // deploy vbToken part 2
+        vbTokenPart2 = new VaultBridgeTokenPart2();
+
         // deploy vbToken
-        vbToken = new MockVbToken();
+        vbToken = new GenericVaultBridgeToken();
         VaultBridgeToken.InitializationParameters memory initParams = VaultBridgeToken.InitializationParameters({
             owner: owner,
             name: VBTOKEN_NAME,
@@ -337,11 +276,13 @@ contract IntegrationTest is Test, ZkEVMCommon {
             yieldRecipient: yieldRecipient,
             lxlyBridge: LXLY_BRIDGE_X,
             minimumYieldVaultDeposit: MINIMUM_YIELD_VAULT_DEPOSIT,
-            transferFeeCalculator: address(0),
-            migrationManager: migrationManagerAddr
+            migrationManager: migrationManagerAddr,
+            yieldVaultMaximumSlippagePercentage: YIELD_VAULT_ALLOWED_SLIPPAGE,
+            vaultBridgeTokenPart2: address(vbTokenPart2)
         });
         bytes memory vbTokenInitData = abi.encodeCall(vbToken.initialize, (initializer, initParams));
-        vbToken = MockVbToken(_proxify(address(vbToken), address(this), vbTokenInitData));
+        vbToken = GenericVaultBridgeToken(payable(_proxify(address(vbToken), address(this), vbTokenInitData)));
+        vbTokenPart2 = VaultBridgeTokenPart2(payable(address(vbToken)));
 
         uint32[] memory layerYLxlyIds = new uint32[](1);
         layerYLxlyIds[0] = NETWORK_ID_Y;
@@ -354,7 +295,7 @@ contract IntegrationTest is Test, ZkEVMCommon {
         migrationManager =
             MigrationManager(payable(_proxify(address(migrationManagerImpl), address(this), migrationManagerInitData)));
         vm.prank(owner);
-        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, address(vbToken));
+        migrationManager.configureNativeConverters(layerYLxlyIds, nativeConverters, payable(address(vbToken)));
         assertEq(migrationManagerAddr, address(migrationManager));
 
         //////////////////////////////////////////////////////////////
@@ -363,12 +304,12 @@ contract IntegrationTest is Test, ZkEVMCommon {
         forkIdLayerY = vm.createSelectFork("tatara");
 
         // deploy custom token
-        customToken = new MockCustomToken();
+        customToken = new GenericCustomToken();
         bytes memory customTokenInitData = abi.encodeCall(
-            MockCustomToken(customToken).initialize,
+            GenericCustomToken.reinitialize,
             (owner, CUSTOM_TOKEN_NAME, CUSTOM_TOKEN_SYMBOL, CUSTOM_TOKEN_DECIMALS, LXLY_BRIDGE_Y, nativeConverterAddr)
         );
-        customToken = MockCustomToken(_proxify(address(customToken), address(this), customTokenInitData));
+        customToken = GenericCustomToken(_proxify(address(customToken), address(this), customTokenInitData));
 
         // calculate bridge wrapped vbToken address
         bwVbToken = TokenWrapped(
@@ -400,9 +341,9 @@ contract IntegrationTest is Test, ZkEVMCommon {
         vm.etch(address(bwUnderlyingAsset), address(tempBwUnderlyingAsset).code);
 
         // deploy native converter
-        nativeConverter = new MockNativeConverter();
+        nativeConverter = new GenericNativeConverter();
         bytes memory nativeConverterInitData = abi.encodeCall(
-            MockNativeConverter(nativeConverter).initialize,
+            GenericNativeConverter(nativeConverter).initialize,
             (
                 owner,
                 VBTOKEN_DECIMALS,
@@ -415,7 +356,7 @@ contract IntegrationTest is Test, ZkEVMCommon {
             )
         );
         nativeConverter =
-            MockNativeConverter(_proxify(address(nativeConverter), address(this), nativeConverterInitData));
+            GenericNativeConverter(_proxify(address(nativeConverter), address(this), nativeConverterInitData));
         assertEq(nativeConverterAddr, address(nativeConverter));
 
         //////////////////////////////////////////////////////////////
@@ -688,7 +629,7 @@ contract IntegrationTest is Test, ZkEVMCommon {
             _ILxLyBridge(LXLY_BRIDGE_Y).depositCount() + 1
         );
         vm.expectEmit();
-        emit NativeConverter.MigrationStarted(owner, amountToMigrate, amountToMigrate);
+        emit NativeConverter.MigrationStarted(amountToMigrate, amountToMigrate);
         vm.prank(owner);
         nativeConverter.migrateBackingToLayerX(amountToMigrate);
 

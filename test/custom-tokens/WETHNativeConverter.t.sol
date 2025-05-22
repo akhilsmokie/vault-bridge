@@ -1,4 +1,4 @@
-//
+// SPDX-License-Identifier: LicenseRef-PolygonLabs-Open-Attribution OR LicenseRef-PolygonLabs-Source-Available
 pragma solidity ^0.8.29;
 
 import "forge-std/Test.sol";
@@ -10,6 +10,7 @@ import {MockERC20} from "forge-std/mocks/MockERC20.sol";
 import {MockERC20MintableBurnable} from "../GenericNativeConverter.t.sol";
 import {WETH} from "src/custom-tokens/WETH/WETH.sol";
 
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {PausableUpgradeable} from "@openzeppelin-contracts-upgradeable/utils/PausableUpgradeable.sol";
 
@@ -41,7 +42,9 @@ contract LXLYBridgeMock {
 }
 
 contract WETHNativeConverterTest is Test, GenericNativeConverterTest {
-    MockERC20 internal wWETH;
+    uint256 constant MAX_NON_MIGRATABLE_GAS_BACKING_PERCENTAGE = 1e17;
+
+    MockERC20MintableBurnable internal wWETH;
     WETH internal wETH;
     LXLYBridgeMock internal lxlyBridgeMock;
     address internal migrationManager_ = makeAddr("migrationManager");
@@ -52,21 +55,20 @@ contract WETHNativeConverterTest is Test, GenericNativeConverterTest {
         zkevmFork = vm.createSelectFork("polygon_zkevm", 19164969);
 
         // Setup tokens
-        wWETH = new MockERC20();
+        wWETH = new MockERC20MintableBurnable();
         wWETH.initialize("Wrapped WETH", "wWETH", 18);
         wETH = new WETH();
         address calculatedNativeConverterAddr = vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 2);
         vm.etch(LXLY_BRIDGE, SOVEREIGN_BRIDGE_BYTECODE);
         bytes memory initData = abi.encodeCall(
-            WETH.initialize, (address(this), "wETH", "wETH", 18, LXLY_BRIDGE, calculatedNativeConverterAddr)
+            WETH.reinitialize, (address(this), "wETH", "wETH", 18, LXLY_BRIDGE, calculatedNativeConverterAddr)
         );
         wETH = WETH(payable(address(new TransparentUpgradeableProxy(address(wETH), address(this), initData))));
 
-        // assign addresses for generic testing
+        // assign variables for generic testing
         customToken = MockERC20MintableBurnable(address(wETH));
-        underlyingToken = MockERC20(address(wWETH));
+        underlyingToken = MockERC20MintableBurnable(address(wWETH));
         migrationManager = migrationManager_;
-
         underlyingTokenMetadata = abi.encode("Wrapped WETH", "wWETH", 18);
 
         // Deploy and initialize converter
@@ -86,11 +88,14 @@ contract WETHNativeConverterTest is Test, GenericNativeConverterTest {
                 LXLY_BRIDGE,
                 NETWORK_ID_L1,
                 MAX_NON_MIGRATABLE_BACKING_PERCENTAGE,
-                migrationManager
+                migrationManager,
+                MAX_NON_MIGRATABLE_GAS_BACKING_PERCENTAGE
             )
         );
         nativeConverter = GenericNativeConverter(_proxify(address(nativeConverter), address(this), initData));
         assertEq(address(nativeConverter), calculatedNativeConverterAddr);
+
+        _mapCustomToken(originUnderlyingToken, address(wWETH), false);
 
         wETHConverter = WETHNativeConverter(payable(address(nativeConverter)));
 
@@ -122,7 +127,8 @@ contract WETHNativeConverterTest is Test, GenericNativeConverterTest {
                 LXLY_BRIDGE,
                 NETWORK_ID_L1,
                 MAX_NON_MIGRATABLE_BACKING_PERCENTAGE,
-                migrationManager
+                migrationManager,
+                MAX_NON_MIGRATABLE_GAS_BACKING_PERCENTAGE
             )
         );
         vm.expectRevert(NativeConverter.InvalidOwner.selector);
@@ -138,7 +144,8 @@ contract WETHNativeConverterTest is Test, GenericNativeConverterTest {
                 LXLY_BRIDGE,
                 NETWORK_ID_L1,
                 MAX_NON_MIGRATABLE_BACKING_PERCENTAGE,
-                migrationManager
+                migrationManager,
+                MAX_NON_MIGRATABLE_GAS_BACKING_PERCENTAGE
             )
         );
         vm.expectRevert(NativeConverter.InvalidCustomToken.selector);
@@ -154,7 +161,8 @@ contract WETHNativeConverterTest is Test, GenericNativeConverterTest {
                 LXLY_BRIDGE,
                 NETWORK_ID_L1,
                 MAX_NON_MIGRATABLE_BACKING_PERCENTAGE,
-                migrationManager
+                migrationManager,
+                MAX_NON_MIGRATABLE_GAS_BACKING_PERCENTAGE
             )
         );
         vm.expectRevert(NativeConverter.InvalidUnderlyingToken.selector);
@@ -170,7 +178,8 @@ contract WETHNativeConverterTest is Test, GenericNativeConverterTest {
                 address(0),
                 NETWORK_ID_L1,
                 MAX_NON_MIGRATABLE_BACKING_PERCENTAGE,
-                migrationManager
+                migrationManager,
+                MAX_NON_MIGRATABLE_GAS_BACKING_PERCENTAGE
             )
         );
         vm.expectRevert(NativeConverter.InvalidLxLyBridge.selector);
@@ -189,7 +198,8 @@ contract WETHNativeConverterTest is Test, GenericNativeConverterTest {
                 LXLY_BRIDGE,
                 NETWORK_ID_L1,
                 MAX_NON_MIGRATABLE_BACKING_PERCENTAGE,
-                migrationManager
+                migrationManager,
+                MAX_NON_MIGRATABLE_GAS_BACKING_PERCENTAGE
             )
         );
         vm.expectRevert(abi.encodeWithSelector(NativeConverter.NonMatchingCustomTokenDecimals.selector, 6, 18));
@@ -208,7 +218,8 @@ contract WETHNativeConverterTest is Test, GenericNativeConverterTest {
                 LXLY_BRIDGE,
                 NETWORK_ID_L1,
                 MAX_NON_MIGRATABLE_BACKING_PERCENTAGE,
-                migrationManager
+                migrationManager,
+                MAX_NON_MIGRATABLE_GAS_BACKING_PERCENTAGE
             )
         );
         vm.expectRevert(abi.encodeWithSelector(NativeConverter.NonMatchingUnderlyingTokenDecimals.selector, 6, 18));
@@ -224,7 +235,8 @@ contract WETHNativeConverterTest is Test, GenericNativeConverterTest {
                 LXLY_BRIDGE,
                 NETWORK_ID_L1,
                 1e19,
-                migrationManager
+                migrationManager,
+                MAX_NON_MIGRATABLE_GAS_BACKING_PERCENTAGE
             )
         );
         vm.expectRevert(abi.encodeWithSelector(NativeConverter.InvalidNonMigratableBackingPercentage.selector));
@@ -240,10 +252,28 @@ contract WETHNativeConverterTest is Test, GenericNativeConverterTest {
                 LXLY_BRIDGE,
                 NETWORK_ID_L1,
                 MAX_NON_MIGRATABLE_BACKING_PERCENTAGE,
-                address(0)
+                address(0),
+                MAX_NON_MIGRATABLE_GAS_BACKING_PERCENTAGE
             )
         );
         vm.expectRevert(NativeConverter.InvalidMigrationManager.selector);
+        GenericNativeConverter(_proxify(address(nativeConverter), address(this), initData));
+
+        initData = abi.encodeCall(
+            WETHNativeConverter.initialize,
+            (
+                owner,
+                ORIGINAL_UNDERLYING_TOKEN_DECIMALS,
+                address(customToken),
+                address(underlyingToken),
+                LXLY_BRIDGE,
+                NETWORK_ID_L1,
+                MAX_NON_MIGRATABLE_BACKING_PERCENTAGE,
+                migrationManager,
+                1e19
+            )
+        );
+        vm.expectRevert(NativeConverter.InvalidNonMigratableBackingPercentage.selector);
         GenericNativeConverter(_proxify(address(nativeConverter), address(this), initData));
     }
 
@@ -265,41 +295,40 @@ contract WETHNativeConverterTest is Test, GenericNativeConverterTest {
         uint256 backingOnLayerY = 0;
         deal(address(underlyingToken), owner, amount);
         underlyingToken.approve(address(nativeConverter), amount);
-        backingOnLayerY = nativeConverter.convert(amount, recipient);
+        backingOnLayerY = wETHConverter.convert(amount, recipient);
 
-        // @todo fix once the reentrancy flow is fixed
-        // deal(address(wETH), amountToMigrate);
+        deal(address(wETH), amount);
 
-        // vm.expectEmit();
-        // emit BridgeEvent(
-        //     LEAF_TYPE_ASSET, NETWORK_ID_L1, address(0x00), NETWORK_ID_L1, migrationManager, amountToMigrate, "", 55413
-        // );
-        // vm.expectEmit();
-        // emit BridgeEvent(
-        //     LEAF_TYPE_MESSAGE,
-        //     NETWORK_ID_L2,
-        //     address(wETHConverter),
-        //     NETWORK_ID_L1,
-        //     migrationManager,
-        //     0,
-        //     abi.encode(
-        //         MigrationManager.CrossNetworkInstruction.WRAP_GAS_TOKEN_AND_COMPLETE_MIGRATION,
-        //         abi.encode(amountToMigrate, amountToMigrate)
-        //     ),
-        //     55414
-        // );
-        // vm.expectEmit();
-        // emit NativeConverter.MigrationStarted(owner, amountToMigrate, amountToMigrate);
-        // wETHConverter.migrateGasBackingToLayerX(amountToMigrate);
-        // assertEq(address(wETH).balance, amountToMigrate);
-
-        vm.expectRevert(NativeConverter.InvalidAssets.selector);
-        wETHConverter.migrateGasBackingToLayerX(0);
+        vm.expectEmit();
+        emit BridgeEvent(
+            LEAF_TYPE_ASSET, NETWORK_ID_L1, address(0x00), NETWORK_ID_L1, migrationManager, amountToMigrate, "", 55413
+        );
+        vm.expectEmit();
+        emit BridgeEvent(
+            LEAF_TYPE_MESSAGE,
+            NETWORK_ID_L2,
+            address(wETHConverter),
+            NETWORK_ID_L1,
+            migrationManager,
+            0,
+            abi.encode(
+                MigrationManager.CrossNetworkInstruction.WRAP_GAS_TOKEN_AND_COMPLETE_MIGRATION,
+                abi.encode(amountToMigrate, amountToMigrate)
+            ),
+            55414
+        );
+        vm.expectEmit();
+        emit NativeConverter.MigrationStarted(amountToMigrate, amountToMigrate);
+        wETHConverter.migrateGasBackingToLayerX(amountToMigrate);
+        assertEq(address(wETH).balance, amountToMigrate);
 
         uint256 currentBacking = address(wETH).balance;
+        uint256 nonMigratableGasBacking = Math.mulDiv(amount, MAX_NON_MIGRATABLE_GAS_BACKING_PERCENTAGE, 1e18); // since the non-migratable gas backing is calculated as the percentage of the total supply of the custom token we take the original amount
 
         vm.expectRevert(
-            abi.encodeWithSelector(NativeConverter.AssetsTooLarge.selector, currentBacking, currentBacking + 1)
+            abi.encodeWithSelector(
+                NativeConverter.AssetsTooLarge.selector, currentBacking - nonMigratableGasBacking, currentBacking + 1
+            )
         );
         wETHConverter.migrateGasBackingToLayerX(currentBacking + 1);
 
@@ -341,7 +370,8 @@ contract WETHNativeConverterTest is Test, GenericNativeConverterTest {
                 _lxlyBridge,
                 NETWORK_ID_L1,
                 MAX_NON_MIGRATABLE_BACKING_PERCENTAGE,
-                migrationManager
+                migrationManager,
+                MAX_NON_MIGRATABLE_GAS_BACKING_PERCENTAGE
             )
         );
         wETHConverter = WETHNativeConverter(payable(_proxify(address(wETHConverter), address(this), initData)));
