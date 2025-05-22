@@ -13,6 +13,7 @@ import {ReentrancyGuardUpgradeable} from "@openzeppelin-contracts-upgradeable/ut
 import {IVersioned} from "./etc/IVersioned.sol";
 
 /// @title Custom Token
+/// @author See https://github.com/agglayer/vault-bridge
 /// @notice A Custom Token is an ERC-20 token deployed on Layer Ys to represent the native version of the original underlying token from Layer X on Layer Y.
 /// @dev A base contract used to create Custom Tokens.
 /// @dev @note IMPORTANT: Custom Token MUST be custom mapped to the corresponding vbToken on LxLy Bridge on Layer Y and MUST give the minting and burning permission to LxLy Bridge and Native Converter. It MAY have a transfer fee.

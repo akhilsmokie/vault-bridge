@@ -31,6 +31,7 @@ import {ERC20Upgradeable} from "@openzeppelin-contracts-upgradeable/token/ERC20/
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 /// @title Vault Bridge Token
+/// @author See https://github.com/agglayer/vault-bridge
 /// @notice A vbToken is an ERC-20 token, ERC-4626 vault, and LxLy Bridge extension, enabling deposits and bridging of select assets, such as WBTC, WETH, USDT, USDC, and USDS, while producing yield.
 /// @dev A base contract used to create vault bridge tokens.
 /// @dev @note IMPORTANT: In order to not drive the complexity of the Vault Bridge protocol up, vbToken MUST NOT have transfer, deposit, or withdrawal fees. The underlying token on Layer X MUST NOT have a transfer fee; the contract will revert if a transfer fee is detected. The underlying token and Custom Token on Layer Ys MAY have transfer fees. The yield vault SHOULD NOT have deposit and/or withdrawal fees, and the price of its shares MUST NOT decrease (e.g., the vault does not realize bad debt); still, this contract implements solvency checks for protection. Additionally, the underlying token MUST NOT be a rebasing token, and MUST NOT have transfer hooks (i.e., the token does not enable reentrancy/cross-entrancy).

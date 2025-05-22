@@ -23,6 +23,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // @remind Redocument.
 /// @title Migration Manager (singleton)
+/// @author See https://github.com/agglayer/vault-bridge
 /// @notice Migration Manager is a singleton contract that lives on Layer X.
 /// @notice Backing for custom tokens minted by Native Converters on Layer Ys can be migrated to Layer X using Migration Manager. Migration Manager completes migrations by calling `completeMigration` on the corresponidng vbToken, which mints vbToken and bridge them to address zero on the Layer Ys, effectively locking the backing in LxLy Bridge. Please refer to `onMessageReceived` for more information.
 contract MigrationManager is

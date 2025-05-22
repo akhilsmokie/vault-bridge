@@ -19,6 +19,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // @remind Document.
 // @title Vault Bridge Token: Initializer (singleton)
+/// @author See https://github.com/agglayer/vault-bridge
 contract VaultBridgeTokenInitializer is IVaultBridgeTokenInitializer, VaultBridgeToken {
     // Libraries.
     using SafeERC20 for IERC20;

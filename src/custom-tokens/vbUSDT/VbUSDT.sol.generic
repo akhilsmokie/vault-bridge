@@ -5,6 +5,7 @@ pragma solidity 0.8.29;
 import {GenericCustomToken} from "../GenericCustomToken.sol";
 
 /// @title VbUSDT Custom Token
+/// @author See https://github.com/agglayer/vault-bridge
 /// @dev No customization is required.
 /// @dev This contract does not need to be deployed. You can point `VbUSDT` proxy to `GenericCustomToken` instead.
 contract VbUSDT is GenericCustomToken {}
