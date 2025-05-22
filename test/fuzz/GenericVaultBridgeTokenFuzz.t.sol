@@ -1,4 +1,4 @@
-//
+// SPDX-License-Identifier: LicenseRef-PolygonLabs-Open-Attribution OR LicenseRef-PolygonLabs-Source-Available
 pragma solidity ^0.8.29;
 
 import "forge-std/Test.sol";
@@ -7,6 +7,7 @@ import {GenericVaultBridgeToken} from "src/vault-bridge-tokens/GenericVaultBridg
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {VaultBridgeToken, PausableUpgradeable, Initializable} from "src/VaultBridgeToken.sol";
+import {VaultBridgeTokenPart2} from "src/VaultBridgeTokenPart2.sol";
 import {VaultBridgeTokenInitializer} from "src/VaultBridgeTokenInitializer.sol";
 
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
@@ -28,6 +29,10 @@ contract GenericVaultBridgeTokenHarness is GenericVaultBridgeToken {
             assets, exact, receiver, originalTotalSupply, originalUncollectedYield, originalReservedAssets
         );
     }
+
+    function internal_depositIntoYieldVault(uint256 assets, bool exact) internal returns (uint256 nonDepositedAssets) {
+        nonDepositedAssets = _depositIntoYieldVault(assets, exact);
+    }
 }
 
 contract GenericVaultBridgeTokenFuzzTest is Test {
@@ -40,10 +45,12 @@ contract GenericVaultBridgeTokenFuzzTest is Test {
     uint256 internal constant MAX_DEPOSIT = 10e18;
     uint256 internal constant MAX_WITHDRAW = 10e18;
     uint256 internal constant MINIMUM_YIELD_VAULT_DEPOSIT = 1e12;
+    uint256 internal constant YIELD_VAULT_ALLOWED_SLIPPAGE = 1e16; // 1%
 
     address asset;
     address vbTokenImplementation;
     GenericVaultBridgeTokenHarness vbToken;
+    VaultBridgeTokenPart2 vbTokenPart2;
     TestVault vbTokenVault;
     uint256 mainnetFork;
 
@@ -63,6 +70,8 @@ contract GenericVaultBridgeTokenFuzzTest is Test {
         vbToken = new GenericVaultBridgeTokenHarness();
         vbTokenImplementation = address(vbToken);
 
+        vbTokenPart2 = new VaultBridgeTokenPart2();
+
         VaultBridgeToken.InitializationParameters memory initParams = VaultBridgeToken.InitializationParameters({
             owner: owner,
             name: "Vault Bridge USDC",
@@ -73,12 +82,15 @@ contract GenericVaultBridgeTokenFuzzTest is Test {
             yieldRecipient: yieldRecipient,
             lxlyBridge: LXLY_BRIDGE,
             minimumYieldVaultDeposit: MINIMUM_YIELD_VAULT_DEPOSIT,
-            transferFeeCalculator: address(0),
-            migrationManager: migrationManager
+            migrationManager: migrationManager,
+            yieldVaultMaximumSlippagePercentage: YIELD_VAULT_ALLOWED_SLIPPAGE,
+            vaultBridgeTokenPart2: address(vbTokenPart2)
         });
         bytes memory initData =
             abi.encodeCall(vbToken.initialize, (address(new VaultBridgeTokenInitializer()), initParams));
-        vbToken = GenericVaultBridgeTokenHarness(_proxify(address(vbTokenImplementation), address(this), initData));
+        vbToken =
+            GenericVaultBridgeTokenHarness(payable(_proxify(address(vbTokenImplementation), address(this), initData)));
+        vbTokenPart2 = VaultBridgeTokenPart2(payable(address(vbToken)));
 
         deal(asset, migrationManager, 10000000 ether);
         vm.prank(migrationManager);
@@ -93,7 +105,11 @@ contract GenericVaultBridgeTokenFuzzTest is Test {
         vm.label(sender, "Sender");
         vm.label(yieldRecipient, "Yield Recipient");
         vm.label(LXLY_BRIDGE, "Lxly Bridge");
+        vm.label(address(vbTokenPart2), "vbToken Part 2");
     }
+
+    // @todo add fuzz tests for the following functions:
+    // - _depositIntoYieldVault
 
     function testFuzz_withdrawFromYieldVault_revert(uint256 assets, uint256 originalTotalSupply, uint256 slippageAmount)
         public
@@ -136,7 +152,7 @@ contract GenericVaultBridgeTokenFuzzTest is Test {
     function testFuzz_setMinimumReservePercentage(uint256 percentage) public {
         vm.assume(percentage <= 1e18);
         vm.prank(owner);
-        vbToken.setMinimumReservePercentage(percentage);
+        vbTokenPart2.setMinimumReservePercentage(percentage);
         assertEq(vbToken.minimumReservePercentage(), percentage);
     }
 

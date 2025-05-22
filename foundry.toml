@@ -6,7 +6,11 @@ via-ir = true
 verbosity = 2
 ffi = true
 optimizer = true
-optimizer_runs = 999999
+optimizer_runs = 833
+
+fs_permissions = [
+  { access = "read", path = "script/input.json" },
+]
 
 remappings = [
     "@openzeppelin-contracts-upgradeable/=dependencies/@openzeppelin-contracts-upgradeable-5.1.0/",
@@ -22,6 +26,10 @@ polygon_pos = "https://polygon-mainnet.infura.io/v3/${INFURA_TOKEN}"
 polygon_zkevm = "https://zkevm-rpc.com"
 polygon_zkevm_testnet = "https://rpc.public.zkevm-test.net"
 tatara = "https://rpc.tatara.katanarpc.com/${TATARA_TOKEN}"
+
+[etherscan]
+mainnet = { key = "${API_KEY}" }
+sepolia = { key = "${API_KEY}" }
 
 [dependencies]
 forge-std = { version = "1.9.4" }
