@@ -4,7 +4,6 @@ pragma solidity ^0.8.29;
 import "forge-std/Script.sol";
 import "../src/custom-tokens/WETH/WETH.sol";
 import "../src/custom-tokens/WETH/WETHNativeConverter.sol";
-import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {ERC1967Proxy, ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
@@ -37,12 +36,13 @@ contract DeployLayerY_WETH is Script {
         string memory name = input.readString(string.concat(vbETHSlug, ".name"));
         string memory symbol = input.readString(string.concat(vbETHSlug, ".symbol"));
         uint8 decimals = uint8(input.readUint(string.concat(vbETHSlug, ".decimals")));
+        uint256 nonMigratableGasBackingPercentage = input.readUint(string.concat(vbETHSlug, ".nonMigratableGasBackingPercentage"));
 
         WETHNativeConverter nativeConverterImpl = new WETHNativeConverter();
 
         bytes memory initNativeConverter = abi.encodeCall(
             WETHNativeConverter.initialize,
-            (polygonEngineeringMultisig, decimals, vbWETH, wETH, lxlyBridge, 0, 0, migrationManagerAddress, 0)
+            (polygonEngineeringMultisig, decimals, vbWETH, wETH, lxlyBridge, 0, nonMigratableGasBackingPercentage, migrationManagerAddress, 0)
         );
         address wethNativeConverter =
             _proxify(address(nativeConverterImpl), polygonEngineeringMultisig, initNativeConverter);
