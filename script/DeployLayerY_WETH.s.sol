@@ -36,13 +36,24 @@ contract DeployLayerY_WETH is Script {
         string memory name = input.readString(string.concat(vbETHSlug, ".name"));
         string memory symbol = input.readString(string.concat(vbETHSlug, ".symbol"));
         uint8 decimals = uint8(input.readUint(string.concat(vbETHSlug, ".decimals")));
-        uint256 nonMigratableGasBackingPercentage = input.readUint(string.concat(vbETHSlug, ".nonMigratableGasBackingPercentage"));
+        uint256 nonMigratableGasBackingPercentage =
+            input.readUint(string.concat(vbETHSlug, ".nonMigratableGasBackingPercentage"));
 
         WETHNativeConverter nativeConverterImpl = new WETHNativeConverter();
 
         bytes memory initNativeConverter = abi.encodeCall(
             WETHNativeConverter.initialize,
-            (polygonEngineeringMultisig, decimals, vbWETH, wETH, lxlyBridge, 0, nonMigratableGasBackingPercentage, migrationManagerAddress, 0)
+            (
+                polygonEngineeringMultisig,
+                decimals,
+                vbWETH,
+                wETH,
+                lxlyBridge,
+                0,
+                nonMigratableGasBackingPercentage,
+                migrationManagerAddress,
+                0
+            )
         );
         address wethNativeConverter =
             _proxify(address(nativeConverterImpl), polygonEngineeringMultisig, initNativeConverter);
@@ -52,8 +63,7 @@ contract DeployLayerY_WETH is Script {
 
         // update vbWETH
         bytes memory data = abi.encodeCall(
-            WETH.reinitialize,
-            (polygonEngineeringMultisig, name, symbol, decimals, lxlyBridge, wethNativeConverter)
+            WETH.reinitialize, (polygonEngineeringMultisig, name, symbol, decimals, lxlyBridge, wethNativeConverter)
         );
 
         IERC1967Proxy vbWethProxy = IERC1967Proxy(payable(vbWETH));

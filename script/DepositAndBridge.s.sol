@@ -4,7 +4,6 @@ pragma solidity ^0.8.29;
 import "forge-std/Script.sol";
 import "../src/vault-bridge-tokens/vbETH/VbETH.sol";
 
-
 contract DepositAndBridge is Script {
     using stdJson for string;
 
