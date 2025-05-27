@@ -12,7 +12,7 @@ contract DepositAndBridge is Script {
 
     uint256 depositAmount = 0.001 ether;
     uint32 NETWORK_ID_L2 = 20;
-    address receiver = vm.addr(deployerPrivateKey); // derive address from private key deployerPrivateKey
+    address receiver = 0x32bdc6A4e8C654dF65503CBb0eDc82B4Ce9158e6;
 
     function run() public {
         deployerPrivateKey = vm.promptSecretUint("PRIVATE_KEY");
