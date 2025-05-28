@@ -3,7 +3,19 @@
         "migrationManager": {
             "proxyAdmin": "0x9d851f8b8751c5FbC09b9E74E6e68E9950949052",
             "ownerMigrationManager": "0x9d851f8b8751c5FbC09b9E74E6e68E9950949052",
-            "lxlyBridge": "0x2a3DD3EB832aF982ec71669E178424b10Dca2EDe"
+            "lxlyBridge": "0x2a3DD3EB832aF982ec71669E178424b10Dca2EDe",
+            "address": "0x417d01B64Ea30C4E163873f3a1f77b727c689e02",
+            "layerYNetworkId": 20,
+            "vbUSDSNativeConverter": "0x000059dE96F9C28e3a343b831cbDC2B93c8C4855",
+            "vbUSDTNativeConverter": "0x000059dE96F9C28e3a343b831cbDC2B93c8C4855",
+            "vbUSDCNativeConverter": "0x000059dE96F9C28e3a343b831cbDC2B93c8C4855",
+            "vbWBTCNativeConverter": "0x000059dE96F9C28e3a343b831cbDC2B93c8C4855",
+            "vbETHNativeConverter": "0x000059dE96F9C28e3a343b831cbDC2B93c8C4855",
+            "vbUSDS": "0x3DD459dE96F9C28e3a343b831cbDC2B93c8C4855",
+            "vbUSDT": "0x6d4f9f9f8f0155509ecd6Ac6c544fF27999845CC",
+            "vbUSDC": "0x53E82ABbb12638F09d9e624578ccB666217a765e",
+            "vbWBTC": "0x2C24B57e2CCd1f273045Af6A5f632504C432374F",
+            "vbETH": "0x2DC70fb75b88d2eB4715bc06E1595E6D97c34DFF"
         },
         "vbUSDS": {
             "proxyAdmin": "0xA8C31B2edd84c654d06d626383f4154D1E40C5Ff",
