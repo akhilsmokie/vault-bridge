@@ -50,9 +50,9 @@ contract DeployLayerY_WETH is Script {
                 wETH,
                 lxlyBridge,
                 0,
-                nonMigratableGasBackingPercentage,
+                0,
                 migrationManagerAddress,
-                0
+                nonMigratableGasBackingPercentage
             )
         );
         address wethNativeConverter =
